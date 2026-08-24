@@ -320,6 +320,14 @@ button{font-family:inherit}
 .live-pin{--mc:#1b5fa8;animation:pulse 1.6s infinite}
 .pand-outline{fill:#1b5fa8;fill-opacity:.14;stroke:#1b5fa8;stroke-width:2.5}
 
+/* ===== GOLDEN EXAMPLES ===== */
+.goldencards{display:flex;flex-direction:column;gap:10px;padding:0 16px 12px}
+.goldbadge{font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#fff;background:var(--go);padding:3px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.pill-indic{font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--watch);background:color-mix(in srgb,var(--watch) 14%,var(--panel));border:1px solid color-mix(in srgb,var(--watch) 30%,transparent);padding:2px 7px;border-radius:6px;margin-left:8px;vertical-align:middle}
+.card.gold{border-color:color-mix(in srgb,var(--go) 35%,var(--line));background:color-mix(in srgb,var(--go) 4%,var(--panel))}
+.gold-pin{box-shadow:0 0 0 3px #fff,0 0 0 5px var(--go),0 1px 5px rgba(20,30,20,.4)}
+.gold-pin .gstar{position:absolute;top:-5px;right:-5px;width:15px;height:15px;border-radius:50%;background:var(--go);color:#fff;font-size:9px;font-weight:700;display:grid;place-items:center;border:1.5px solid #fff}
+
 @media (max-width:1360px){ .main{grid-template-columns:340px 1fr 400px} }
 @media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}}
 </style>
@@ -380,6 +388,7 @@ button{font-family:inherit}
         <span class="spark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18"/></svg></span>
         <div><b id="newBannerN">24 nieuwe kansen sinds je vorige bezoek</b><span>Bijgewerkt 08:42 · laatste scan vandaag</span></div>
       </div>
+      <div class="goldencards" id="goldenCards"></div>
       <div class="cards" id="cards"></div>
       <button class="loadmore" id="loadMore">Meer kansen laden <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></button>
     </aside>
@@ -548,6 +557,72 @@ const DATA=SEED.map((s,i)=>{
   h.kavelM2=84000;h.perM2=185;h.prijs=185*84000;h.potBVO=50400;h.perBVO=Math.round(h.prijs/h.potBVO);
 })();
 
+/* ===== GOLDEN EXAMPLES — drie echte, verifieerbare panden (deel E) =====
+   Adres/coördinaten/id's zijn vooraf geresolved via de PDOK Locatieserver en geverifieerd
+   tegen de BAG (zie BRIEF-echte-data.md). Bouwjaar/oppervlakte/aantalVO hieronder zijn de
+   live BAG-waarden op het moment van onderzoek — de drawer haalt ze bij openen opnieuw
+   live op (fetchBagFacts/fetchBodemFacts) zodat ze verifieerbaar en actueel blijven. */
+const CURRENT_YEAR=2026;
+const GOLDEN_FACTS=[
+  {key:'ecofactorij',name:'Ecofactorij 1',city:'Apeldoorn',province:'Gelderland',postcode:'7325WC',
+   lon:6.03568002,lat:52.20099543,adresseerbaarobject_id:'0200010000056543',
+   bouwjaar:2007,oppervlakte:3336,aantalVO:3,gebruiksdoel:'industriefunctie,kantoorfunctie',
+   terrein:'Bedrijventerrein Ecofactorij (duurzaam bedrijventerrein langs de A1)'},
+  {key:'zonnecel',name:'De Zonnecel 30',city:'Amersfoort',province:'Utrecht',postcode:'3815KN',
+   lon:5.42824694,lat:52.16747721,adresseerbaarobject_id:'0307010000523451',
+   bouwjaar:2008,oppervlakte:12208,aantalVO:1,gebruiksdoel:'industriefunctie',
+   terrein:'Bedrijvenpark De Wieken-Vinkenhoef (bij knooppunt Hoevelaken)'},
+  {key:'wiekenweg',name:'Wiekenweg 44A',city:'Amersfoort',province:'Utrecht',postcode:'3815KL',
+   lon:5.43089655,lat:52.16570383,adresseerbaarobject_id:'0307010000562536',
+   bouwjaar:2020,oppervlakte:94,aantalVO:1,gebruiksdoel:'industriefunctie',
+   terrein:'Bedrijvenpark De Wieken-Vinkenhoef (bij knooppunt Hoevelaken)'}
+];
+// Score afgeleid uit échte BAG-feiten (geen synthetische generator): ouder + groter → hogere
+// herontwikkel-/intensiveringskans; nieuw + klein → lage kans. Eén verblijfsobject in het pand
+// (vermoedelijk één eigenaar/huurder) geeft een kleine bonus (eenvoudiger te acquireren).
+function goldenScore(g){
+  const age=Math.max(0,CURRENT_YEAR-g.bouwjaar);
+  const ageScore=Math.max(0,Math.min(100,Math.round(age*3.5)));
+  const sizeScore=g.oppervlakte?Math.max(0,Math.min(100,Math.round(Math.log10(g.oppervlakte)*40-40))):30;
+  const ownerBonus=g.aantalVO===1?4:0;
+  const score=Math.max(5,Math.min(99,Math.round(ageScore*0.55+sizeScore*0.45)+ownerBonus));
+  return {score,age,ageScore,sizeScore,ownerBonus};
+}
+function goldenWhyNow(g,sc){
+  return [
+    `Pand uit ${g.bouwjaar} (${sc.age} jaar oud)`,
+    `${fmtN(g.oppervlakte)} m² BVO — ${g.gebruiksdoel.split(',').join(' / ')}`,
+    g.aantalVO===1?'Eén verblijfsobject in dit pand — vermoedelijk één eigenaar/huurder':`${g.aantalVO} verblijfsobjecten in dit pand — gedeeld gebruik`
+  ];
+}
+const goldenCache={}; // key -> {bag:{status,...}, bodem:{status,...}}
+let goldenPandLayer=null, goldenMarkerLayer=null;
+async function loadGolden(key,force){
+  const g=GOLDEN_FACTS.find(x=>x.key===key); if(!g)return;
+  if(goldenCache[key]&&!force)return;
+  goldenCache[key]={bag:{status:'loading'},bodem:{status:'loading'}};
+  if(selId==='golden:'+key)renderDrawer();
+  const [bagR,bodemR]=await Promise.allSettled([fetchBagFacts(g.adresseerbaarobject_id),fetchBodemFacts(g.lon,g.lat)]);
+  goldenCache[key].bag = bagR.status==='fulfilled' ? {status:'ok',...bagR.value} : {status:'error',message:bagR.reason&&bagR.reason.message||'Onbekende fout'};
+  goldenCache[key].bodem = bodemR.status==='fulfilled' ? {status:'ok',...bodemR.value} : {status:'error',message:bodemR.reason&&bodemR.reason.message||'Onbekende fout'};
+  if(selId==='golden:'+key){renderDrawer();drawGoldenPand(key);}
+}
+function drawGoldenPand(key){
+  const c=goldenCache[key];
+  if(!c||!c.bag||c.bag.status!=='ok'||!c.bag.pand||!c.bag.pand.geometry||!LMAP)return;
+  if(goldenPandLayer)LMAP.removeLayer(goldenPandLayer);
+  goldenPandLayer=L.geoJSON(c.bag.pand.geometry,{style:{color:'#1b5fa8',weight:2.5,fillColor:'#1b5fa8',fillOpacity:.14}}).addTo(LMAP);
+}
+function selectGolden(key){
+  selId='golden:'+key;curPhase=1;setPhase();
+  renderCards();renderPins();renderDrawer();
+  const g=GOLDEN_FACTS.find(x=>x.key===key);
+  if(LMAP&&g)LMAP.panTo([g.lat,g.lon],{animate:true});
+  const cached=goldenCache[key];
+  if(cached&&cached.bag&&cached.bag.status==='ok')drawGoldenPand(key);
+  loadGolden(key,false);
+}
+
 /* ===== STATE ===== */
 let fCon="alle",sortBy="score",fText="",fPrice="alle",selId=null,curPhase=1;
 const PRICE_RANGES={alle:[0,Infinity],lt10:[0,10e6],"10-20":[10e6,20e6],"20-35":[20e6,35e6],gt35:[35e6,Infinity]};
@@ -602,12 +677,35 @@ function cardHTML(d){
     </div>
   </div>`;
 }
+function goldenCardHTML(g){
+  const sc=goldenScore(g), why=goldenWhyNow(g,sc), sel=selId==='golden:'+g.key;
+  return `<div class="card gold ${sel?'sel':''}" data-golden="${g.key}">
+    <div class="top">
+      <div class="gauge" style="width:54px;height:54px">${gauge(sc.score,54)}</div>
+      <div class="cinfo">
+        <div class="crow"><h3>${g.name}</h3><div class="loc">${g.city}, ${g.province}</div></div>
+        <div class="crow2"><span class="goldbadge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>Echte data</span></div>
+      </div>
+    </div>
+    <div class="why"><div class="wl">Waarom nu · uit echte BAG-feiten</div><p>${why[0]}. ${why[1]}.</p></div>
+    <div class="cmetrics">
+      <div class="cm"><span class="cml">Bouwjaar (BAG)</span><span class="cmv">${g.bouwjaar}</span></div>
+      <div class="cm"><span class="cml">Oppervlakte (BAG)</span><span class="cmv">${fmtN(g.oppervlakte)} m²</span></div>
+    </div>
+  </div>`;
+}
+function renderGoldenCards(){
+  const el=document.getElementById("goldenCards"); if(!el)return;
+  el.innerHTML=GOLDEN_FACTS.map(goldenCardHTML).join("");
+  el.querySelectorAll("[data-golden]").forEach(card=>card.addEventListener("click",()=>selectGolden(card.dataset.golden)));
+}
 function fmtHa(v){return v.toFixed(1).replace('.',',');}
 function fmtEurM(v){return '€ '+(v/1e6).toFixed(1).replace('.',',')+' M';}
 function fmtEurM2(v){return '€ '+v.toLocaleString('nl-NL')+'/m²';}
 function fmtEur0(v){return '€ '+v.toLocaleString('nl-NL');}
 function fmtN(v){return v.toLocaleString('nl-NL');}
 function renderCards(){
+  renderGoldenCards();
   const v=visible();const c=document.getElementById("cards");
   c.innerHTML=v.map(cardHTML).join("")||`<div style="padding:26px;text-align:center;color:var(--mut)">Geen kansen voor deze selectie.</div>`;
   c.querySelectorAll(".card").forEach(el=>el.addEventListener("click",()=>select(+el.dataset.id,'card')));
@@ -646,28 +744,48 @@ async function fetchLocatie(token,lat,lon){
     renderDrawer();
   }
 }
+function parsePointWkt(wkt){
+  const m=/POINT\(([-\d.]+)\s+([-\d.]+)\)/.exec(wkt||'');
+  return m?{lon:+m[1],lat:+m[2]}:null;
+}
+/* Kale, herbruikbare fetchers — geen state/rendering. Gebruikt door zowel de klik-quickscan als de golden examples. */
+async function fetchBagFacts(voId){
+  if(!voId)throw new Error('Geen verblijfsobject-id in dit adres (mogelijk een straat/postcode-punt zonder pand)');
+  const voUrl=`${BAG_BASE}/collections/verblijfsobject/items?identificatie=${encodeURIComponent(voId)}&f=json`;
+  const voRes=await fetch(voUrl); if(!voRes.ok)throw new Error(`BAG verblijfsobject: HTTP ${voRes.status}`);
+  const voJson=await voRes.json();
+  const voFeat=voJson.features&&voJson.features[0];
+  if(!voFeat)throw new Error('Geen verblijfsobject gevonden voor dit adres in de BAG');
+  const voProps=voFeat.properties;
+  let pand=null;
+  const pandHrefs=voProps['pand.href'];
+  if(pandHrefs&&pandHrefs[0]){
+    const pUrl=pandHrefs[0]+(pandHrefs[0].includes('?')?'&f=json':'?f=json');
+    const pRes=await fetch(pUrl);
+    if(pRes.ok){
+      const pFeat=await pRes.json();
+      pand={bouwjaar:pFeat.properties.bouwjaar,status:pFeat.properties.status,identificatie:pFeat.properties.identificatie,aantalVerblijfsobjecten:pFeat.properties.aantal_verblijfsobjecten,geometry:pFeat.geometry};
+    }
+  }
+  return {vo:{gebruiksdoel:voProps.gebruiksdoel,oppervlakte:voProps.oppervlakte,status:voProps.status},pand};
+}
+async function fetchBodemFacts(lon,lat){
+  const d=0.0006; // ~65m bbox rond het punt
+  const minLat=lat-d,maxLat=lat+d,minLon=lon-d,maxLon=lon+d;
+  const url=`${BODEM_WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo&LAYERS=${BODEM_LAYER}&QUERY_LAYERS=${BODEM_LAYER}&CRS=EPSG:4326&BBOX=${minLat},${minLon},${maxLat},${maxLon}&WIDTH=101&HEIGHT=101&I=50&J=50&INFO_FORMAT=application/vnd.esri.wms_featureinfo_xml&FEATURE_COUNT=10`;
+  const res=await fetch(url); if(!res.ok)throw new Error(`Bodemloket: HTTP ${res.status}`);
+  const xmlText=await res.text();
+  const xml=new DOMParser().parseFromString(xmlText,'application/xml');
+  if(xml.querySelector('parsererror'))throw new Error('Onverwacht antwoordformaat van Bodemloket');
+  const feats=Array.from(xml.getElementsByTagName('FeatureInfo'));
+  const first=feats[0]?Array.from(feats[0].getElementsByTagName('Field')).map(f=>({name:f.getElementsByTagName('FieldName')[0]?.textContent,value:f.getElementsByTagName('FieldValue')[0]?.textContent})).filter(f=>f.name&&f.name!=='Shape'):[];
+  return {count:feats.length,fields:first};
+}
 async function fetchBag(token,doc){
   try{
-    const voId=doc.adresseerbaarobject_id;
-    if(!voId)throw new Error('Geen verblijfsobject-id in dit adres (mogelijk een straat/postcode-punt zonder pand)');
-    const voUrl=`${BAG_BASE}/collections/verblijfsobject/items?identificatie=${encodeURIComponent(voId)}&f=json`;
-    const voRes=await fetch(voUrl); if(!voRes.ok)throw new Error(`BAG verblijfsobject: HTTP ${voRes.status}`);
-    const voJson=await voRes.json();
-    const voFeat=voJson.features&&voJson.features[0];
-    if(!voFeat)throw new Error('Geen verblijfsobject gevonden voor dit adres in de BAG');
-    const voProps=voFeat.properties;
-    let pand=null;
-    const pandHrefs=voProps['pand.href'];
-    if(pandHrefs&&pandHrefs[0]){
-      const pUrl=pandHrefs[0]+(pandHrefs[0].includes('?')?'&f=json':'?f=json');
-      const pRes=await fetch(pUrl);
-      if(pRes.ok){
-        const pFeat=await pRes.json();
-        pand={bouwjaar:pFeat.properties.bouwjaar,status:pFeat.properties.status,identificatie:pFeat.properties.identificatie,geometry:pFeat.geometry};
-      }
-    }
+    const {vo,pand}=await fetchBagFacts(doc.adresseerbaarobject_id);
     if(token!==liveSeq)return;
-    liveScan.bag={status:'ok',vo:{gebruiksdoel:voProps.gebruiksdoel,oppervlakte:voProps.oppervlakte,status:voProps.status},pand};
+    liveScan.bag={status:'ok',vo,pand};
     renderDrawer();
     if(pand&&pand.geometry&&LMAP){
       if(livePandLayer)LMAP.removeLayer(livePandLayer);
@@ -680,25 +798,13 @@ async function fetchBag(token,doc){
     renderDrawer();
   }
 }
-function parsePointWkt(wkt){
-  const m=/POINT\(([-\d.]+)\s+([-\d.]+)\)/.exec(wkt||'');
-  return m?{lon:+m[1],lat:+m[2]}:null;
-}
 async function fetchBodem(token,doc){
   try{
     const pt=parsePointWkt(doc.centroide_ll);
     if(!pt)throw new Error('Geen coördinaat beschikbaar voor bodemquery');
-    const d=0.0006; // ~65m bbox rond het adrespunt
-    const minLat=pt.lat-d,maxLat=pt.lat+d,minLon=pt.lon-d,maxLon=pt.lon+d;
-    const url=`${BODEM_WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo&LAYERS=${BODEM_LAYER}&QUERY_LAYERS=${BODEM_LAYER}&CRS=EPSG:4326&BBOX=${minLat},${minLon},${maxLat},${maxLon}&WIDTH=101&HEIGHT=101&I=50&J=50&INFO_FORMAT=application/vnd.esri.wms_featureinfo_xml&FEATURE_COUNT=10`;
-    const res=await fetch(url); if(!res.ok)throw new Error(`Bodemloket: HTTP ${res.status}`);
-    const xmlText=await res.text();
-    const xml=new DOMParser().parseFromString(xmlText,'application/xml');
-    if(xml.querySelector('parsererror'))throw new Error('Onverwacht antwoordformaat van Bodemloket');
-    const feats=Array.from(xml.getElementsByTagName('FeatureInfo'));
-    const first=feats[0]?Array.from(feats[0].getElementsByTagName('Field')).map(f=>({name:f.getElementsByTagName('FieldName')[0]?.textContent,value:f.getElementsByTagName('FieldValue')[0]?.textContent})).filter(f=>f.name&&f.name!=='Shape'):[];
+    const {count,fields}=await fetchBodemFacts(pt.lon,pt.lat);
     if(token!==liveSeq)return;
-    liveScan.bodem={status:'ok',count:feats.length,fields:first};
+    liveScan.bodem={status:'ok',count,fields};
     renderDrawer();
   }catch(err){
     console.error('[live quickscan] Bodemloket-fetch mislukt:',err);
@@ -733,6 +839,23 @@ function scoreIcon(d){
   const html=`<div class="lmk${sel?' sel':''}" style="--mc:${fill}"><span>${d.score}</span>${qualified.has(d.id)?'<i class="q"></i>':''}</div>`;
   return L.divIcon({html,className:'lmk-wrap',iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]});
 }
+function goldIcon(g,sel){
+  const sc=goldenScore(g).score, fill=scoreFill(sc), sz=sel?42:36;
+  const html=`<div class="lmk gold-pin${sel?' sel':''}" style="--mc:${fill}"><span>${sc}</span><i class="gstar">✓</i></div>`;
+  return L.divIcon({html,className:'lmk-wrap',iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]});
+}
+function renderGoldenPins(){
+  if(!LMAP)return;
+  if(!goldenMarkerLayer)goldenMarkerLayer=L.layerGroup().addTo(LMAP);
+  goldenMarkerLayer.clearLayers();
+  GOLDEN_FACTS.forEach(g=>{
+    const sel=selId==='golden:'+g.key;
+    const m=L.marker([g.lat,g.lon],{icon:goldIcon(g,sel),zIndexOffset:sel?1200:600});
+    m.bindTooltip(`<b>${g.name}</b><span class="tm"><i>✓ Echte data</i><i>${g.city}</i></span>`,{direction:'top',offset:[0,-6],className:'lmk-tip'});
+    m.on('click',()=>selectGolden(g.key));
+    m.addTo(goldenMarkerLayer);
+  });
+}
 function buildMap(){
   if(LMAP){LMAP.invalidateSize();renderPins();return;}
   LMAP=L.map('map',{center:[52.15,5.45],zoom:7,zoomControl:false,attributionControl:true});
@@ -747,6 +870,7 @@ function buildMap(){
 }
 function renderPins(){
   if(!LMAP)return;
+  renderGoldenPins();
   markerLayer.clearLayers();markerById={};
   visible().forEach(d=>{
     const m=L.marker([d.lat,d.lon],{icon:scoreIcon(d),zIndexOffset:d.id===selId?1000:(d.isNew?200:0)});
@@ -1013,10 +1137,66 @@ function closeLive(){
   renderDrawer();renderCards();renderPins();
 }
 
+function goldenDrawerHTML(g){
+  const sc=goldenScore(g), why=goldenWhyNow(g,sc);
+  const cache=goldenCache[g.key]||{bag:{status:'loading'},bodem:{status:'loading'}};
+  return `<div class="dh">
+    <div class="dtop">
+      <div class="gauge" style="width:58px;height:58px;flex:none">${gauge(sc.score,58)}</div>
+      <div class="dinfo">
+        <div class="dtags"><span class="goldbadge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>Echte data</span></div>
+        <h2>${g.name}</h2>
+        <div class="dloc">${g.city}, ${g.province} · ${g.postcode}</div>
+      </div>
+      <div class="dact">
+        <button class="dbtn" id="goldRefresh" title="Live verversen"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg></button>
+        <button class="dbtn" id="drClose" title="Sluiten"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      </div>
+    </div>
+  </div>
+  <div class="dbody">
+    <div class="livehint">Dit is één van drie <b>echte, verifieerbare</b> panden op ${g.terrein} — geen voorbeelddata. Adres en BAG-/bodemfeiten zijn live opgehaald; controleer ze zelf via het Kadaster of Bodemloket.</div>
+    <div class="sec">
+      <div class="seclab">Gebouw (BAG) <span class="livebadge" style="margin-left:8px"><i></i>Bron: BAG — live</span></div>
+      ${bagSectionHTML(cache.bag)}
+    </div>
+    <div class="sec">
+      <div class="seclab">Bodem-quickscan <span class="livebadge" style="margin-left:8px"><i></i>Bron: Bodemloket — live</span></div>
+      ${bodemSectionHTML(cache.bodem)}
+    </div>
+    <div class="sec">
+      <div class="seclab">Prijsindicatie</div>
+      <div class="livehint">WOZ-waarde volgt zodra de proxy (stap D) gekoppeld is — dan tonen we hier de echte, actuele WOZ-waarde met peildatum, in plaats van een schatting.</div>
+    </div>
+    <div class="sec">
+      <div class="seclab">Score &amp; waarom nu <span class="pill-indic">indicatief · modelinschatting</span></div>
+      <div class="whylist">${why.map(w=>`<div class="whyrow"><div class="wt"><b>${w}</b></div></div>`).join('')}</div>
+      <div class="sigbreak open">
+        <div class="sigrow"><span class="sn">Ouderdom (${sc.age} jr · gewicht 55%)</span><div class="bar"><i style="width:${sc.ageScore}%;background:var(--green-bar)"></i></div><span class="sval">${sc.ageScore}</span></div>
+        <div class="sigrow"><span class="sn">Oppervlakte (${fmtN(g.oppervlakte)} m² · gewicht 45%)</span><div class="bar"><i style="width:${sc.sizeScore}%;background:var(--green-bar)"></i></div><span class="sval">${sc.sizeScore}</span></div>
+        ${sc.ownerBonus?`<div class="sigrow"><span class="sn">Eén eigenaar/huurder (bonus)</span><div class="bar"><i style="width:100%;background:var(--green-bar)"></i></div><span class="sval">+${sc.ownerBonus}</span></div>`:''}
+      </div>
+      <div class="livehint" style="margin-top:10px">Score = 55% ouderdomsscore + 45% oppervlakteschaal (log)${sc.ownerBonus?' + 4 pt bonus bij één verblijfsobject':''} = <b>${sc.score}</b>. Volledig herleidbaar tot de BAG-feiten hierboven — geen synthetische generator.</div>
+    </div>
+  </div>`;
+}
+function closeGolden(){
+  selId=null;
+  if(goldenPandLayer&&LMAP){LMAP.removeLayer(goldenPandLayer);goldenPandLayer=null;}
+  renderDrawer();renderCards();renderPins();
+}
+
 function renderDrawer(){
   const dr=document.getElementById("drawer");
   if(selId==null){dr.innerHTML=`<div class="drawer-empty">Selecteer een kans op de kaart of in de lijst om het intelligence-detail te openen.</div>`;return;}
   if(selId==='live'){dr.innerHTML=liveDrawerHTML(liveScan);dr.scrollTop=0;document.getElementById("drClose").onclick=closeLive;return;}
+  if(typeof selId==='string'&&selId.startsWith('golden:')){
+    const g=GOLDEN_FACTS.find(x=>x.key===selId.slice(7));
+    dr.innerHTML=goldenDrawerHTML(g);dr.scrollTop=0;
+    document.getElementById("drClose").onclick=closeGolden;
+    document.getElementById("goldRefresh").onclick=()=>loadGolden(g.key,true);
+    return;
+  }
   const d=DATA.find(x=>x.id===selId);
   dr.innerHTML=drawerHTML(d);
   dr.scrollTop=0;
