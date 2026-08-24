@@ -131,15 +131,18 @@ De worker haalt het WOZ-endpoint op server-side en zet de CORS-header erop.
 
 ---
 
-## E. Golden examples — twee echte terreinen, volledig met echte data ⭐
+## E. Golden examples — drie echte panden die samen de score-range tonen ⭐
 
-Dit is het belangrijkste onderdeel voor de pitch. We maken **twee opportunities die geen synthetische data hebben, maar een echt adres met echte, live opgehaalde data**. In de pitch is dit het bewijs: "de rest is illustratief, déze twee voorbeelden zijn 100% echt — check het maar in het Kadaster/WOZ-loket."
+Dit is het belangrijkste onderdeel voor de pitch. We maken **drie opportunities die geen synthetische data hebben, maar een echt adres met echte, live opgehaalde data**. In de pitch is dit het bewijs: "de rest is illustratief, déze drie zijn 100% echt — check het maar in het Kadaster/WOZ-loket." De drie zijn bewust zó gekozen dat ze **de hele score-range laten zien** (hoog → laag), zodat je kunt demonstreren dat de radar echt onderscheid maakt in plaats van alles groen kleurt.
 
-**De twee golden examples (door Robert gekozen):**
-- **Apeldoorn — Bedrijventerrein De Ecofactorij.** Duurzaam bedrijventerrein langs de A1 (de straat heet letterlijk "Ecofactorij"). Zoek een concreet bestaand adres op dit terrein via de Locatieserver (bv. `q=Ecofactorij Apeldoorn`) en gebruik dat als anker.
-- **Amersfoort — Bedrijvenpark De Wieken-Vinkenhoef.** Modern light-industrial/logistiek park bij de A1/A28 (straten o.a. "De Wieken", "Vinkenhoefstraat", "Nijverheidsweg-Noord"). Zoek een concreet bestaand adres op dit terrein via de Locatieserver en gebruik dat als anker.
+**De drie golden examples (door Robert gekozen):**
+- **Apeldoorn — Ecofactorij 1 (7325WC).** Groot bedrijfspand (~3.336 m², bouwjaar 2007, industrie/kantoor) op het duurzame Ecofactorij-terrein langs de A1 → verwachte score **hoog/midden**.
+- **Amersfoort — groter pand op De Wieken-Vinkenhoef** (nog te zoeken, bv. > 1.000 m², distributie-/logistiekhal, liefst één eigenaar) → verwachte score **hoog**.
+- **Amersfoort — Wiekenweg 44A (3815KL).** Klein, nieuw unit (~94 m², bouwjaar 2020, in gebruik) → **bewust laag** — dient als tegenvoorbeeld dat aantoont dat de radar discrimineert.
 
-**Werkwijze (voor elk van de twee terreinen):**
+**Score-regel voor golden examples (belangrijk):** leid de score én het "waarom nu" af uit de **échte BAG-/bodemfeiten**, niet uit de synthetische generator. Simpele, transparante, verdedigbare logica, bv.: nieuw pand (recent bouwjaar) + klein oppervlak + "in gebruik" → lage herontwikkel-/intensiveringskans → lage score; ouder pand + groot oppervlak + lage bebouwingsgraad → hogere kans → hogere score; bekende bodemregistratie → aandachtsvlag. Zo is elke score in de pitch te herleiden tot een feit ("deze score komt hier vandaan"), niet tot een willekeurig getal.
+
+**Werkwijze (voor elk van de drie panden):**
 1. **Resolve een concreet, bestaand adres** op het terrein via de PDOK Locatieserver, zodat BAG/WOZ echte panddata teruggeven. Kies bij voorkeur een adres met een bestaand bedrijfspand (geen leeg perceel), zodat bouwjaar/oppervlakte/WOZ gevuld zijn.
    ```
    https://api.pdok.nl/bzk/locatieserver/search/v3_1/free?q={zoekterm}&rows=5
@@ -190,7 +193,7 @@ Alle *andere* kansen (de ~347 synthetische) moeten eerlijk als voorbeeld herkenb
 
 ## Definition of done
 - Klik op de kaart in de gehoste site → drawer toont echt adres, echt bouwjaar + oppervlakte (BAG), echte WOZ-waarde, en een bodem-vlag — met de pandcontour op de kaart.
-- **Golden examples**: twee echte terreinen (De Ecofactorij Apeldoorn + De Wieken-Vinkenhoef Amersfoort) bovenaan de feed met badge "✓ Echte data", die automatisch echte BAG/WOZ/bodem-data laden; feiten gelabeld als bron-live, score/richtprijs gelabeld als modelinschatting.
+- **Golden examples**: drie echte panden bovenaan de feed met badge "✓ Echte data" die automatisch echte BAG/WOZ/bodem-data laden — Ecofactorij 1 Apeldoorn (hoog/midden), een groter pand op De Wieken-Vinkenhoef Amersfoort (hoog), en Wiekenweg 44A Amersfoort (bewust laag). Score + "waarom" afgeleid uit de echte BAG-/bodemfeiten; feiten gelabeld als bron-live, richtprijs als modelinschatting.
 - **Labeling**: alle overige kansen dragen een nette "Voorbeelddata"-pill; er staat een globale notitie dat de kansenlijst illustratief is en de kaart + golden example echt zijn.
 - Elke bron degradeert netjes bij een fout.
 - Alles gecommit en live op `https://rjvanbeilen.github.io/acquisitie-radar/`.

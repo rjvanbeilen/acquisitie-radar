@@ -617,7 +617,9 @@ function renderCards(){
 /* ===== LIVE QUICKSCAN — config & state (echte data via PDOK) ===== */
 const LS_BASE='https://api.pdok.nl/bzk/locatieserver/search/v3_1';
 const BAG_BASE='https://api.pdok.nl/kadaster/bag/ogc/v2';
-const BODEM_WFS='https://service.pdok.nl/rivm/bodemloket/wfs/v1_0';
+// PDOK's eigen Bodemloket-proxy (service.pdok.nl/rivm/bodemloket) is uitgefaseerd; dit is het actieve endpoint achter bodemloket.nl
+const BODEM_WMS='https://gis.gdngeoservices.nl/standalone/services/blk_gdn/lks_blk_rd_v1/MapServer/WMSServer';
+const BODEM_LAYER='WBB_locaties'; // Wet Bodembescherming-locaties: bekende (potentieel) verontreinigde/onderzochte locaties
 const WOZ_PROXY=''; // wordt ingevuld in stap D (Cloudflare Worker-proxy)
 let liveScan=null, liveMarker=null, liveSeq=0, livePandLayer=null;
 
@@ -678,11 +680,38 @@ async function fetchBag(token,doc){
     renderDrawer();
   }
 }
+function parsePointWkt(wkt){
+  const m=/POINT\(([-\d.]+)\s+([-\d.]+)\)/.exec(wkt||'');
+  return m?{lon:+m[1],lat:+m[2]}:null;
+}
+async function fetchBodem(token,doc){
+  try{
+    const pt=parsePointWkt(doc.centroide_ll);
+    if(!pt)throw new Error('Geen coördinaat beschikbaar voor bodemquery');
+    const d=0.0006; // ~65m bbox rond het adrespunt
+    const minLat=pt.lat-d,maxLat=pt.lat+d,minLon=pt.lon-d,maxLon=pt.lon+d;
+    const url=`${BODEM_WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo&LAYERS=${BODEM_LAYER}&QUERY_LAYERS=${BODEM_LAYER}&CRS=EPSG:4326&BBOX=${minLat},${minLon},${maxLat},${maxLon}&WIDTH=101&HEIGHT=101&I=50&J=50&INFO_FORMAT=application/vnd.esri.wms_featureinfo_xml&FEATURE_COUNT=10`;
+    const res=await fetch(url); if(!res.ok)throw new Error(`Bodemloket: HTTP ${res.status}`);
+    const xmlText=await res.text();
+    const xml=new DOMParser().parseFromString(xmlText,'application/xml');
+    if(xml.querySelector('parsererror'))throw new Error('Onverwacht antwoordformaat van Bodemloket');
+    const feats=Array.from(xml.getElementsByTagName('FeatureInfo'));
+    const first=feats[0]?Array.from(feats[0].getElementsByTagName('Field')).map(f=>({name:f.getElementsByTagName('FieldName')[0]?.textContent,value:f.getElementsByTagName('FieldValue')[0]?.textContent})).filter(f=>f.name&&f.name!=='Shape'):[];
+    if(token!==liveSeq)return;
+    liveScan.bodem={status:'ok',count:feats.length,fields:first};
+    renderDrawer();
+  }catch(err){
+    console.error('[live quickscan] Bodemloket-fetch mislukt:',err);
+    if(token!==liveSeq)return;
+    liveScan.bodem={status:'error',message:err.message||'Onbekende fout'};
+    renderDrawer();
+  }
+}
 async function fetchBagAndBodem(token,doc){
   liveScan.bag={status:'loading'};
+  liveScan.bodem={status:'loading'};
   renderDrawer();
-  await fetchBag(token,doc);
-  // bodem (stap C) volgt hieronder
+  await Promise.allSettled([fetchBag(token,doc),fetchBodem(token,doc)]);
 }
 
 function onMapClick(e){
@@ -932,7 +961,17 @@ function bodemSectionHTML(bodem){
   if(bodem.status==='idle')return `<div class="notavail">Wordt geladen zodra het adres bekend is…</div>`;
   if(bodem.status==='loading')return skeletonRows();
   if(bodem.status==='error')return `<div class="errbox"><span>⚠</span><div>Bodemloket niet beschikbaar: ${bodem.message}</div></div>`;
-  return `<div class="notavail">—</div>`;
+  const hit=bodem.count>0;
+  const KEYLAB={VERVOLG_WBB:'Vervolg Wbb',STATUS_OORD:'Status oordeel',ADMINISTRATOR_NM:'Bevoegd gezag'};
+  const keyFields=hit?bodem.fields.filter(f=>KEYLAB[f.name]&&f.value&&f.value!=='Null'):[];
+  return `<div class="check ${hit?'watch':'go'}">
+    <span class="cico">${hit?'!':'✓'}</span>
+    <div class="cbody">
+      <div class="cn">${hit?`Bodem: onderzoek/verontreiniging bekend op deze locatie (${bodem.count} treffer${bodem.count>1?'s':''})`:'Bodem: geen registraties gevonden op deze locatie'}</div>
+      <div class="cd">${hit?(keyFields.length?keyFields.map(f=>`${KEYLAB[f.name]}: ${f.value}`).join(' · '):'Zie details bij het Bodemloket'):'Geen bekende Wbb-locatie (onderzoek/verontreiniging/sanering) op dit punt bij het Bodemloket'}</div>
+    </div>
+  </div>
+  <div class="livehint" style="margin:10px 0 0">Bron: Bodemloket (RIVM/bevoegd gezag) — live. Dit is een quickscan-signaal, geen volledig bodemdossier.</div>`;
 }
 function liveDrawerHTML(ls){
   const loc=ls.locatie;
