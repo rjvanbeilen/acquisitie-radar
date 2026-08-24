@@ -307,6 +307,19 @@ button{font-family:inherit}
 .toast b{font-weight:700}
 .toast .tsub{color:#b6c4bb;font-size:11.5px}
 
+/* ===== LIVE QUICKSCAN ===== */
+.livebadge{font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--go);background:var(--green-weak);border:1px solid color-mix(in srgb,var(--go) 30%,transparent);padding:2px 7px 2px 6px;border-radius:5px;display:inline-flex;align-items:center;gap:5px}
+.livebadge i{width:6px;height:6px;border-radius:50%;background:var(--go);box-shadow:0 0 0 0 var(--go);animation:pulse 2.4s infinite}
+.skel{background:linear-gradient(90deg,var(--panel-3) 25%,var(--line) 37%,var(--panel-3) 63%);background-size:400% 100%;animation:skel 1.4s ease infinite;border-radius:6px}
+@keyframes skel{0%{background-position:100% 50%}100%{background-position:0 50%}}
+.skelrow{height:12px;margin:8px 0;width:100%}
+.skelrow.w60{width:60%}.skelrow.w40{width:40%}
+.errbox{border:1px solid color-mix(in srgb,var(--crit) 28%,transparent);background:color-mix(in srgb,var(--crit) 7%,var(--panel));color:var(--crit);border-radius:10px;padding:11px 13px;font-size:12.5px;display:flex;gap:9px;align-items:flex-start}
+.notavail{color:var(--mut);font-size:12.5px;font-style:italic}
+.livehint{font-size:11.5px;color:var(--mut);background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;margin-bottom:14px;line-height:1.4}
+.live-pin{--mc:#1b5fa8;animation:pulse 1.6s infinite}
+.pand-outline{fill:#1b5fa8;fill-opacity:.14;stroke:#1b5fa8;stroke-width:2.5}
+
 @media (max-width:1360px){ .main{grid-template-columns:340px 1fr 400px} }
 @media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}}
 </style>
@@ -601,6 +614,51 @@ function renderCards(){
   c.querySelectorAll(".fav").forEach(b=>b.addEventListener("click",()=>toggleFav(+b.dataset.fav)));
 }
 
+/* ===== LIVE QUICKSCAN — config & state (echte data via PDOK) ===== */
+const LS_BASE='https://api.pdok.nl/bzk/locatieserver/search/v3_1';
+const BAG_BASE='https://api.pdok.nl/kadaster/bag/ogc/v2';
+const BODEM_WFS='https://service.pdok.nl/rivm/bodemloket/wfs/v1_0';
+const WOZ_PROXY=''; // wordt ingevuld in stap D (Cloudflare Worker-proxy)
+let liveScan=null, liveMarker=null, liveSeq=0, livePandLayer=null;
+
+async function fetchLocatie(token,lat,lon){
+  try{
+    const rUrl=`${LS_BASE}/reverse?lat=${lat}&lon=${lon}&rows=1&type=adres`;
+    const rRes=await fetch(rUrl); if(!rRes.ok)throw new Error(`Locatieserver reverse: HTTP ${rRes.status}`);
+    const rJson=await rRes.json();
+    const hit=rJson.response&&rJson.response.docs&&rJson.response.docs[0];
+    if(!hit)throw new Error('Geen adres gevonden op deze locatie (mogelijk water/buitengebied)');
+    const lUrl=`${LS_BASE}/lookup?id=${encodeURIComponent(hit.id)}&fl=*`;
+    const lRes=await fetch(lUrl); if(!lRes.ok)throw new Error(`Locatieserver lookup: HTTP ${lRes.status}`);
+    const lJson=await lRes.json();
+    const doc=lJson.response&&lJson.response.docs&&lJson.response.docs[0];
+    if(!doc)throw new Error('Lookup leverde geen adresgegevens op');
+    if(token!==liveSeq)return; // gebruiker klikte intussen ergens anders
+    liveScan.locatie={status:'ok',data:doc};
+    renderDrawer();
+    fetchBagAndBodem(token,doc);
+  }catch(err){
+    console.error('[live quickscan] locatie-fetch mislukt:',err);
+    if(token!==liveSeq)return;
+    liveScan.locatie={status:'error',message:err.message||'Onbekende fout'};
+    renderDrawer();
+  }
+}
+// B/C (BAG, Bodemloket) worden hieronder gedefinieerd; placeholder tot dan zodat stap A zelfstandig werkt
+if(typeof fetchBagAndBodem==='undefined')var fetchBagAndBodem=function(){};
+
+function onMapClick(e){
+  const lat=+e.latlng.lat.toFixed(6), lon=+e.latlng.lng.toFixed(6);
+  liveSeq++; const token=liveSeq;
+  liveScan={token,lat,lon,locatie:{status:'loading'},bag:{status:'idle'},bodem:{status:'idle'},woz:{status:'idle'}};
+  selId='live';
+  if(liveMarker){LMAP.removeLayer(liveMarker);liveMarker=null;}
+  if(livePandLayer){LMAP.removeLayer(livePandLayer);livePandLayer=null;}
+  liveMarker=L.marker([lat,lon],{icon:L.divIcon({html:'<div class="lmk live-pin"><span>⌖</span></div>',className:'lmk-wrap',iconSize:[34,34],iconAnchor:[17,17]}),zIndexOffset:1500}).addTo(LMAP);
+  renderCards();renderPins();renderDrawer();
+  fetchLocatie(token,lat,lon);
+}
+
 /* ===== MAP (Leaflet + PDOK) ===== */
 let LMAP=null, markerLayer=null, heatGroup=null, kadasterLayer=null, heat=false, kadOn=false, markerById={};
 function scoreIcon(d){
@@ -617,6 +675,7 @@ function buildMap(){
   LMAP.createPane('heat');LMAP.getPane('heat').style.zIndex=350;LMAP.getPane('heat').style.pointerEvents='none';
   heatGroup=L.layerGroup();
   markerLayer=L.layerGroup().addTo(LMAP);
+  LMAP.on('click',onMapClick);
   renderPins();
 }
 function renderPins(){
@@ -804,9 +863,75 @@ function aerial(d){
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Schematische kavelweergave">${g}</svg>`;
 }
 
+/* ===== LIVE QUICKSCAN — drawer ===== */
+function skeletonRows(){return `<div class="skel skelrow"></div><div class="skel skelrow w60"></div><div class="skel skelrow w40"></div>`;}
+function locatieSectionHTML(loc){
+  if(loc.status==='loading')return skeletonRows();
+  if(loc.status==='error')return `<div class="errbox"><span>⚠</span><div>${loc.message}</div></div>`;
+  const d=loc.data;
+  return `<div class="infocard">
+    <div class="irow"><span class="il">Adres</span><span class="iv">${d.weergavenaam||'—'}</span></div>
+    <div class="irow"><span class="il">Gemeente</span><span class="iv">${d.gemeentenaam||d.woonplaatsnaam||'—'}</span></div>
+    <div class="irow"><span class="il">Postcode</span><span class="iv">${d.postcode||'—'}</span></div>
+    <div class="irow"><span class="il">Provincie</span><span class="iv">${d.provincienaam||'—'}</span></div>
+  </div>`;
+}
+function bagSectionHTML(bag){
+  if(bag.status==='idle')return `<div class="notavail">Wordt geladen zodra het adres bekend is…</div>`;
+  if(bag.status==='loading')return skeletonRows();
+  if(bag.status==='error')return `<div class="errbox"><span>⚠</span><div>BAG niet beschikbaar: ${bag.message}</div></div>`;
+  return `<div class="notavail">—</div>`;
+}
+function bodemSectionHTML(bodem){
+  if(bodem.status==='idle')return `<div class="notavail">Wordt geladen zodra het adres bekend is…</div>`;
+  if(bodem.status==='loading')return skeletonRows();
+  if(bodem.status==='error')return `<div class="errbox"><span>⚠</span><div>Bodemloket niet beschikbaar: ${bodem.message}</div></div>`;
+  return `<div class="notavail">—</div>`;
+}
+function liveDrawerHTML(ls){
+  const loc=ls.locatie;
+  const addr=loc.status==='ok'?loc.data.weergavenaam:null;
+  const sub=loc.status==='ok'?[loc.data.gemeentenaam||loc.data.woonplaatsnaam||'',loc.data.provincienaam||''].filter(Boolean).join(', '):`${ls.lat.toFixed(5)}, ${ls.lon.toFixed(5)}`;
+  return `<div class="dh">
+    <div class="dtop">
+      <div class="gauge" style="width:58px;height:58px;flex:none;display:grid;place-items:center;background:var(--panel-2);border-radius:50%;border:1px solid var(--line)"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1b5fa8" stroke-width="2"><path d="M12 21s7-6.3 7-11a7 7 0 10-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg></div>
+      <div class="dinfo">
+        <div class="dtags"><span class="livebadge"><i></i>Live quickscan</span></div>
+        <h2>${addr?addr:(loc.status==='error'?'Geen adres gevonden':'Adres wordt bepaald…')}</h2>
+        <div class="dloc">${sub}</div>
+      </div>
+      <div class="dact">
+        <button class="dbtn" id="drClose" title="Sluiten"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      </div>
+    </div>
+  </div>
+  <div class="dbody">
+    <div class="livehint">Je klikte op de kaart. Deze sectie toont <b>echte, live opgehaalde data</b> voor deze locatie — dit is geen voorbeelddata.</div>
+    <div class="sec">
+      <div class="seclab"><span class="n">A</span> Locatie &amp; adres</div>
+      ${locatieSectionHTML(loc)}
+    </div>
+    <div class="sec">
+      <div class="seclab"><span class="n">B</span> Gebouw (BAG)</div>
+      ${bagSectionHTML(ls.bag)}
+    </div>
+    <div class="sec">
+      <div class="seclab"><span class="n">C</span> Bodem-quickscan</div>
+      ${bodemSectionHTML(ls.bodem)}
+    </div>
+  </div>`;
+}
+function closeLive(){
+  selId=null;liveScan=null;
+  if(liveMarker&&LMAP){LMAP.removeLayer(liveMarker);liveMarker=null;}
+  if(livePandLayer&&LMAP){LMAP.removeLayer(livePandLayer);livePandLayer=null;}
+  renderDrawer();renderCards();renderPins();
+}
+
 function renderDrawer(){
   const dr=document.getElementById("drawer");
   if(selId==null){dr.innerHTML=`<div class="drawer-empty">Selecteer een kans op de kaart of in de lijst om het intelligence-detail te openen.</div>`;return;}
+  if(selId==='live'){dr.innerHTML=liveDrawerHTML(liveScan);dr.scrollTop=0;document.getElementById("drClose").onclick=closeLive;return;}
   const d=DATA.find(x=>x.id===selId);
   dr.innerHTML=drawerHTML(d);
   dr.scrollTop=0;
