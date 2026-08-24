@@ -1010,6 +1010,10 @@ function drawerHTML(d){
     ${gold
       ?`<div class="livehint" style="margin-bottom:14px">✓ Echte data — adres en BAG-/bodem-/WOZ-feiten zijn live opgehaald en verifieerbaar. Overige velden (score, richtprijs, quickscan-checks, omgevingsplan) zijn indicatief; eigendom/rechten/hypotheek vereisen een Kadaster-licentie (Fase 3).</div>`
       :`<div class="livehint" style="margin-bottom:14px">⚠ Voorbeelddata — dit is illustratieve data. Open een golden example (bovenaan de kaart/lijst, groen ✓) voor 100% echte, live data.</div>`}
+    ${gold?`<div class="sec">
+      <div class="seclab">Gebouw (BAG) ${srcBadge('live')}</div>
+      ${bagSectionHTML(d.live.bag)}
+    </div>`:''}
     <div class="sec">
       <div class="seclab">Prijsindicatie ${srcBadge('indic')}</div>
       <div class="priceband">
