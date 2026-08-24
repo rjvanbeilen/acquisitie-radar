@@ -644,8 +644,46 @@ async function fetchLocatie(token,lat,lon){
     renderDrawer();
   }
 }
-// B/C (BAG, Bodemloket) worden hieronder gedefinieerd; placeholder tot dan zodat stap A zelfstandig werkt
-if(typeof fetchBagAndBodem==='undefined')var fetchBagAndBodem=function(){};
+async function fetchBag(token,doc){
+  try{
+    const voId=doc.adresseerbaarobject_id;
+    if(!voId)throw new Error('Geen verblijfsobject-id in dit adres (mogelijk een straat/postcode-punt zonder pand)');
+    const voUrl=`${BAG_BASE}/collections/verblijfsobject/items?identificatie=${encodeURIComponent(voId)}&f=json`;
+    const voRes=await fetch(voUrl); if(!voRes.ok)throw new Error(`BAG verblijfsobject: HTTP ${voRes.status}`);
+    const voJson=await voRes.json();
+    const voFeat=voJson.features&&voJson.features[0];
+    if(!voFeat)throw new Error('Geen verblijfsobject gevonden voor dit adres in de BAG');
+    const voProps=voFeat.properties;
+    let pand=null;
+    const pandHrefs=voProps['pand.href'];
+    if(pandHrefs&&pandHrefs[0]){
+      const pUrl=pandHrefs[0]+(pandHrefs[0].includes('?')?'&f=json':'?f=json');
+      const pRes=await fetch(pUrl);
+      if(pRes.ok){
+        const pFeat=await pRes.json();
+        pand={bouwjaar:pFeat.properties.bouwjaar,status:pFeat.properties.status,identificatie:pFeat.properties.identificatie,geometry:pFeat.geometry};
+      }
+    }
+    if(token!==liveSeq)return;
+    liveScan.bag={status:'ok',vo:{gebruiksdoel:voProps.gebruiksdoel,oppervlakte:voProps.oppervlakte,status:voProps.status},pand};
+    renderDrawer();
+    if(pand&&pand.geometry&&LMAP){
+      if(livePandLayer)LMAP.removeLayer(livePandLayer);
+      livePandLayer=L.geoJSON(pand.geometry,{style:{className:'pand-outline',color:'#1b5fa8',weight:2.5,fillColor:'#1b5fa8',fillOpacity:.14}}).addTo(LMAP);
+    }
+  }catch(err){
+    console.error('[live quickscan] BAG-fetch mislukt:',err);
+    if(token!==liveSeq)return;
+    liveScan.bag={status:'error',message:err.message||'Onbekende fout'};
+    renderDrawer();
+  }
+}
+async function fetchBagAndBodem(token,doc){
+  liveScan.bag={status:'loading'};
+  renderDrawer();
+  await fetchBag(token,doc);
+  // bodem (stap C) volgt hieronder
+}
 
 function onMapClick(e){
   const lat=+e.latlng.lat.toFixed(6), lon=+e.latlng.lng.toFixed(6);
@@ -880,7 +918,15 @@ function bagSectionHTML(bag){
   if(bag.status==='idle')return `<div class="notavail">Wordt geladen zodra het adres bekend is…</div>`;
   if(bag.status==='loading')return skeletonRows();
   if(bag.status==='error')return `<div class="errbox"><span>⚠</span><div>BAG niet beschikbaar: ${bag.message}</div></div>`;
-  return `<div class="notavail">—</div>`;
+  const vo=bag.vo,p=bag.pand;
+  return `<div class="infocard">
+    <div class="irow"><span class="il">Bouwjaar</span><span class="iv">${p&&p.bouwjaar?p.bouwjaar:'—'}</span></div>
+    <div class="irow"><span class="il">Oppervlakte</span><span class="iv">${vo.oppervlakte?vo.oppervlakte+' m²':'—'}</span></div>
+    <div class="irow"><span class="il">Gebruiksdoel</span><span class="iv">${vo.gebruiksdoel||'—'}</span></div>
+    <div class="irow"><span class="il">Status verblijfsobject</span><span class="iv ${vo.status&&vo.status.includes('gebruik')?'ok':''}">${vo.status||'—'}</span></div>
+    ${p?`<div class="irow"><span class="il">Status pand</span><span class="iv ${p.status&&p.status.includes('gebruik')?'ok':''}">${p.status||'—'}</span></div>`:''}
+  </div>
+  <div class="livehint" style="margin:10px 0 0">Bron: BAG (Kadaster) — live${p&&p.geometry?'. Pandcontour getekend op de kaart.':''}</div>`;
 }
 function bodemSectionHTML(bodem){
   if(bodem.status==='idle')return `<div class="notavail">Wordt geladen zodra het adres bekend is…</div>`;
