@@ -1,0 +1,877 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Acquisitie-Radar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  color-scheme:light;
+  --bg:#eef0ec; --panel:#ffffff; --panel-2:#f7f8f5; --panel-3:#eef1ec;
+  --nav:#161a1e; --nav-2:#1e242a; --nav-line:#2b323a; --nav-text:#e7eaec; --nav-mut:#8b949d;
+  --ink:#181f26; --ink-2:#414b55; --mut:#727c86; --mut-2:#9aa3ac;
+  --line:#e5e8e2; --line-2:#d6dad2;
+  --green:#2b7a4b; --green-2:#236340; --green-cta:#123a25; --green-bar:#3a9c63; --green-weak:#eef5ef;
+  --go:#2f8b56; --watch:#bd8418; --crit:#bf4329;
+  --layers:#6d4ac2; --layers-weak:#efeafb;
+  --storage:#a9781b; --storage-weak:#f7f0e1;
+  --urban:#0d8790; --urban-weak:#e3f2f2;
+  --shadow:0 1px 2px rgba(20,28,20,.05),0 3px 14px rgba(20,28,20,.05);
+  --shadow-md:0 6px 22px rgba(20,28,20,.09);
+  --shadow-lg:0 24px 60px rgba(12,22,16,.20);
+  --r:14px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font-family:"Instrument Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.serif{font-family:"Fraunces",Georgia,serif}
+button{font-family:inherit}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#cdd2ca;border-radius:8px;border:3px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:#b7bdb3;background-clip:padding-box}
+
+.app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* ===== TOP NAV ===== */
+.nav{height:56px;flex:none;background:var(--nav);display:flex;align-items:center;gap:0;padding:0 18px;border-bottom:1px solid #000}
+.nav .logo{font-family:"Fraunces",serif;font-weight:600;font-size:18px;letter-spacing:.01em;color:#fff}
+.nav .logo b{font-weight:600}
+.nav .vdiv{width:1px;height:22px;background:var(--nav-line);margin:0 16px}
+.nav .app-name{color:var(--nav-text);font-weight:600;font-size:14px;letter-spacing:.01em}
+.nav .steps{display:flex;align-items:center;gap:2px;margin:0 auto}
+.nav .step{position:relative;display:flex;align-items:center;gap:8px;padding:18px 16px;color:var(--nav-mut);font-size:13.5px;font-weight:500;cursor:pointer;background:none;border:0;transition:color .15s}
+.nav .step .sn{font-family:"IBM Plex Mono";font-size:11px;opacity:.8}
+.nav .step:hover{color:var(--nav-text)}
+.nav .step.on{color:#fff}
+.nav .step.on::after{content:"";position:absolute;left:12px;right:12px;bottom:0;height:2px;background:var(--green-bar);border-radius:2px}
+.nav .step.last{color:#c8cdd2}
+.nav .right{display:flex;align-items:center;gap:8px;margin-left:8px}
+.nav .ic{width:36px;height:36px;border-radius:9px;border:1px solid var(--nav-line);background:transparent;color:var(--nav-mut);display:grid;place-items:center;cursor:pointer;position:relative}
+.nav .ic:hover{color:#fff;border-color:#3a424b}
+.nav .bdot{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;padding:0 4px;border-radius:9px;background:var(--green-bar);color:#08130c;font-size:10px;font-weight:700;display:grid;place-items:center;font-family:"IBM Plex Mono"}
+.nav .user{display:flex;align-items:center;gap:10px;padding:5px 8px 5px 5px;border-radius:10px;cursor:pointer}
+.nav .user:hover{background:var(--nav-2)}
+.nav .ava{width:32px;height:32px;border-radius:50%;background:linear-gradient(140deg,#3a9c63,#1c5e3b);display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px;font-family:"Instrument Sans"}
+.nav .uname{line-height:1.15}
+.nav .uname b{display:block;color:var(--nav-text);font-size:12.5px;font-weight:600}
+.nav .uname span{color:var(--nav-mut);font-size:11px}
+.nav .chev{color:var(--nav-mut)}
+
+/* ===== MAIN GRID ===== */
+.main{flex:1;display:grid;grid-template-columns:376px 1fr 436px;min-height:0}
+.col{min-height:0;overflow-y:auto;overflow-x:hidden}
+.feed{border-right:1px solid var(--line);background:var(--panel-2)}
+.mapcol{position:relative;overflow:hidden;background:#dfe6e6}
+.drawercol{border-left:1px solid var(--line);background:var(--panel);overflow-y:auto}
+
+/* ===== FEED ===== */
+.feedhead{padding:20px 20px 12px}
+.feedhead h1{font-family:"Fraunces",serif;font-weight:600;font-size:26px;margin:0;letter-spacing:-.01em}
+.feedhead .sub{color:var(--mut);font-size:13px;margin-top:2px}
+.tabs{display:flex;gap:6px;padding:0 20px 12px;flex-wrap:wrap}
+.tab{appearance:none;border:1px solid var(--line-2);background:var(--panel);color:var(--ink-2);font-size:12.5px;font-weight:600;padding:6px 11px;border-radius:20px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:.13s}
+.tab .ct{color:var(--mut);font-weight:600;font-family:"IBM Plex Mono";font-size:11px}
+.tab:hover{border-color:var(--mut-2)}
+.tab.on{background:var(--nav);border-color:var(--nav);color:#fff}
+.tab.on .ct{color:#aeb6bd}
+.tab .dot{width:8px;height:8px;border-radius:50%}
+.feedctl{display:flex;align-items:center;gap:8px;padding:0 20px 12px;flex-wrap:wrap}
+.selwrap{position:relative;flex:1}
+.selwrap select{appearance:none;width:100%;border:1px solid var(--line-2);background:var(--panel);color:var(--ink);font:inherit;font-size:12.5px;padding:8px 30px 8px 11px;border-radius:9px;cursor:pointer}
+.selwrap::after{content:"";position:absolute;right:12px;top:50%;width:7px;height:7px;border-right:2px solid var(--mut);border-bottom:2px solid var(--mut);transform:translateY(-70%) rotate(45deg);pointer-events:none}
+.selwrap .lbl{position:absolute;left:11px;top:-7px;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);background:var(--panel-2);padding:0 4px;font-family:"IBM Plex Mono"}
+.fbtn{border:1px solid var(--line-2);background:var(--panel);color:var(--ink-2);font-size:12.5px;font-weight:600;padding:8px 13px;border-radius:9px;cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+.fbtn:hover{border-color:var(--mut-2)}
+
+.newbanner{margin:0 20px 14px;display:flex;align-items:center;gap:12px;background:linear-gradient(100deg,var(--green-weak),transparent 80%),var(--panel);border:1px solid var(--line);border-left:3px solid var(--green-bar);border-radius:12px;padding:12px 14px}
+.newbanner .spark{width:34px;height:34px;border-radius:9px;background:color-mix(in srgb,var(--green-bar) 16%,transparent);color:var(--green);display:grid;place-items:center;flex:none}
+.newbanner b{font-size:13.5px;font-weight:700;display:block}
+.newbanner span{font-size:11.5px;color:var(--mut)}
+
+.cards{padding:0 14px 18px;display:flex;flex-direction:column;gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:13px;cursor:pointer;transition:border-color .13s,box-shadow .13s,transform .05s;position:relative}
+.card:hover{border-color:var(--mut-2);box-shadow:var(--shadow)}
+.card.sel{border-color:var(--green);box-shadow:0 0 0 1px var(--green),var(--shadow-md)}
+.card .top{display:flex;gap:12px}
+.gauge{flex:none;position:relative}
+.gauge .gv{position:absolute;inset:0;display:grid;place-items:center;font-family:"Instrument Sans";font-weight:700}
+.card .cinfo{flex:1;min-width:0}
+.card .crow{padding-right:28px}
+.card h3{font-size:15px;font-weight:700;margin:0;letter-spacing:-.01em;line-height:1.2}
+.card .loc{font-size:12px;color:var(--mut);margin-top:1px}
+.card .crow2{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap}
+.cbadge{font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:3px 8px;border-radius:6px;white-space:nowrap;flex:none}
+.cbadge.layers{background:var(--layers-weak);color:var(--layers)}
+.cbadge.storage{background:var(--storage-weak);color:var(--storage)}
+.cbadge.urban{background:var(--urban-weak);color:var(--urban)}
+.newtag{font-size:9px;font-weight:700;letter-spacing:.06em;color:var(--green);background:var(--green-weak);border:1px solid color-mix(in srgb,var(--green) 22%,transparent);padding:2px 6px;border-radius:5px}
+.why{margin-top:10px}
+.why .wl{font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:var(--mut);font-family:"IBM Plex Mono";margin-bottom:3px}
+.why p{margin:0;font-size:12.5px;color:var(--ink-2);line-height:1.35}
+.cmetrics{display:flex;align-items:center;gap:14px;margin-top:11px;padding-top:11px;border-top:1px solid var(--line)}
+.cm{display:flex;flex-direction:column;gap:3px}
+.cm .cml{font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);font-family:"IBM Plex Mono"}
+.cm .cmv{font-size:12px;font-weight:600}
+.cm .cmsub{font-size:9.5px;color:var(--mut);font-family:"IBM Plex Mono"}
+.cmbar{flex:1;display:flex;flex-direction:column;gap:4px;min-width:0}
+.cmbar .bl{display:flex;justify-content:space-between;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);font-family:"IBM Plex Mono"}
+.bar{height:5px;background:var(--panel-3);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:4px;background:var(--green-bar)}
+.card .fav{position:absolute;top:12px;right:12px;width:26px;height:26px;border-radius:7px;border:0;background:transparent;color:var(--mut-2);cursor:pointer;display:grid;place-items:center;opacity:0;transition:.12s}
+.card:hover .fav,.card .fav.on{opacity:1}
+.card .fav.on{color:var(--watch)}
+.card .cbadges{display:flex;gap:6px;align-items:center;position:absolute;top:13px;right:44px}
+.f2tag{font-size:9px;font-weight:700;letter-spacing:.05em;color:var(--green);background:var(--green-weak);border:1px solid color-mix(in srgb,var(--green) 26%,transparent);padding:2px 7px;border-radius:20px}
+.loadmore{margin:2px 20px 22px;width:calc(100% - 40px);border:1px solid var(--line-2);background:var(--panel);color:var(--ink-2);font-weight:600;font-size:13px;padding:11px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+.loadmore:hover{border-color:var(--mut-2)}
+
+/* ===== MAP ===== */
+#map{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0;background:#e7ecec}
+.leaflet-container{font-family:inherit;background:#e7ecec}
+.leaflet-div-icon.lmk-wrap{background:transparent;border:none}
+.lmk{width:100%;height:100%;border-radius:50%;background:var(--mc);color:#fff;border:2px solid #fff;box-shadow:0 1px 5px rgba(20,30,20,.4);display:grid;place-items:center;font-family:"Instrument Sans",sans-serif;font-weight:700;font-size:12px;position:relative;cursor:pointer;transition:transform .1s}
+.lmk.sel{font-size:14px;box-shadow:0 0 0 4px color-mix(in srgb,var(--mc) 22%,transparent),0 2px 7px rgba(20,30,20,.45)}
+.lmk .q{position:absolute;top:-3px;right:-3px;width:9px;height:9px;border-radius:50%;background:#123a25;border:1.5px solid #fff}
+.leaflet-tooltip.lmk-tip{background:var(--nav);color:#fff;border:none;box-shadow:var(--shadow-md);border-radius:9px;padding:7px 11px;font-size:12px}
+.leaflet-tooltip.lmk-tip b{font-weight:700;font-size:12.5px}
+.leaflet-tooltip.lmk-tip .tm{display:flex;gap:9px;margin-top:2px;color:#b6c4bb;font-size:11px}
+.leaflet-tooltip.lmk-tip .tm i{font-style:normal}
+.leaflet-tooltip-top.lmk-tip::before{border-top-color:var(--nav)}
+.mapcol .mapctl,.mapcol .maplabel,.mapcol .maplegend2,.mapcol .zoomctl,.mapcol .statpill{z-index:1000}
+.mapctl{position:absolute;top:16px;left:16px;display:flex;gap:8px;z-index:5}
+.mapbtn{background:rgba(255,255,255,.95);border:1px solid var(--line-2);color:var(--ink-2);font-size:12.5px;font-weight:600;padding:8px 13px;border-radius:9px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;box-shadow:var(--shadow);backdrop-filter:blur(6px)}
+.mapbtn:hover{border-color:var(--mut-2)}
+.mapbtn.on{background:var(--nav);border-color:var(--nav);color:#fff}
+.maplabel{position:absolute;top:16px;right:16px;z-index:5;background:rgba(255,255,255,.92);border:1px solid var(--line-2);border-radius:9px;padding:7px 12px;font-size:11.5px;color:var(--ink-2);box-shadow:var(--shadow);display:flex;align-items:center;gap:8px}
+.maplegend2{position:absolute;left:16px;top:64px;z-index:5;background:rgba(255,255,255,.95);border:1px solid var(--line-2);border-radius:10px;padding:9px 12px;box-shadow:var(--shadow);display:flex;align-items:center;gap:9px;backdrop-filter:blur(6px)}
+.maplegend2 .mll{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);font-family:"IBM Plex Mono"}
+.maplegend2 .grad{width:104px;height:8px;border-radius:5px;background:linear-gradient(90deg,#b23a26,#c25a1f,#b07d12,#4e8c2f,#1f7a43)}
+.maplegend2 .mn,.maplegend2 .mx{font-size:10px;color:var(--mut);font-family:"IBM Plex Mono"}
+.brandbtn{background:none;border:0;padding:0;cursor:pointer;display:inline-flex;align-items:center;border-radius:8px}
+.brandbtn:hover{opacity:.85}
+.homehint{display:inline-flex;align-items:center;gap:6px;margin-left:14px;background:var(--nav-2);border:1px solid var(--nav-line);color:var(--nav-text);font-family:inherit;font-size:12px;font-weight:600;padding:6px 11px;border-radius:8px;cursor:pointer}
+.homehint:hover{border-color:#3a424b;color:#fff}
+.maplabel .live{width:7px;height:7px;border-radius:50%;background:var(--go);box-shadow:0 0 0 0 var(--go);animation:pulse 2.4s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--go) 55%,transparent)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.mtip{position:absolute;z-index:6;transform:translate(-50%,-115%);background:var(--nav);color:#fff;border-radius:9px;padding:7px 11px;font-size:12px;pointer-events:none;opacity:0;transition:opacity .12s;white-space:nowrap;box-shadow:var(--shadow-md)}
+.mtip .mtn{font-weight:700;font-size:12.5px}
+.mtip .mtm{font-size:11px;color:#b6c4bb;display:flex;gap:9px;margin-top:2px}
+.zoomctl{position:absolute;right:16px;bottom:88px;z-index:5;display:flex;flex-direction:column;background:rgba(255,255,255,.95);border:1px solid var(--line-2);border-radius:10px;overflow:hidden;box-shadow:var(--shadow)}
+.zoomctl button{width:38px;height:38px;border:0;background:transparent;color:var(--ink-2);font-size:18px;cursor:pointer}
+.zoomctl button:hover{background:var(--panel-3)}
+.zoomctl button+button{border-top:1px solid var(--line)}
+.statpill{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);z-index:5;display:flex;align-items:center;background:var(--nav);border-radius:13px;padding:11px 6px;box-shadow:var(--shadow-lg)}
+.statpill .st{display:flex;align-items:center;gap:9px;padding:2px 18px;color:#fff}
+.statpill .st+.st{border-left:1px solid var(--nav-line)}
+.statpill .sic{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;flex:none}
+.statpill .sv{font-family:"Instrument Sans";font-weight:700;font-size:18px;line-height:1}
+.statpill .sl{font-size:10.5px;color:var(--nav-mut);margin-top:2px}
+.pin{cursor:pointer}
+.pin text{font-family:"Instrument Sans";font-weight:700;pointer-events:none}
+.citylbl{font-family:"Instrument Sans";font-size:11px;fill:#5c6b5f;font-weight:500;pointer-events:none}
+.citydot{fill:#8a978b}
+.corlbl{font-family:"IBM Plex Mono";font-size:9px;fill:#93a396;pointer-events:none}
+
+/* ===== DRAWER ===== */
+.drawer-empty{padding:60px 30px;text-align:center;color:var(--mut)}
+.dh{padding:18px 20px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:4}
+.dh .dtop{display:flex;gap:14px;align-items:flex-start}
+.dh .dinfo{flex:1;min-width:0}
+.dh .dtags{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.dh h2{font-family:"Fraunces",serif;font-weight:600;font-size:22px;margin:0;letter-spacing:-.01em;line-height:1.12}
+.dh .dloc{font-size:12.5px;color:var(--mut);margin-top:3px;display:flex;align-items:center;gap:6px}
+.dh .dact{display:flex;gap:6px;flex:none}
+.dbtn{width:32px;height:32px;border-radius:8px;border:1px solid var(--line-2);background:var(--panel);color:var(--mut);cursor:pointer;display:grid;place-items:center}
+.dbtn:hover{color:var(--ink);border-color:var(--mut-2)}
+.dbtn.fav.on{color:var(--watch);border-color:color-mix(in srgb,var(--watch) 40%,transparent)}
+.dmetrics{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-top:16px;border:1px solid var(--line);border-radius:11px;overflow:hidden}
+.dmetrics .dm{padding:10px 12px;background:var(--panel)}
+.dmetrics .dm+.dm{border-left:1px solid var(--line)}
+.dm .dml{font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);font-family:"IBM Plex Mono";display:flex;align-items:center;gap:4px}
+.dm .dmv{font-size:14px;font-weight:700;margin-top:3px;letter-spacing:-.01em}
+.dmetrics .dm.hl{background:var(--green-weak)}
+.dm.hl .dmv{color:var(--green)}
+.priceband{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.priceband .pbmain{padding:13px 15px;background:linear-gradient(100deg,var(--green-weak),transparent 75%),var(--panel);border-bottom:1px solid var(--line)}
+.priceband .pbl{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);font-family:"IBM Plex Mono"}
+.priceband .pbv{font-family:"Instrument Sans",sans-serif;font-weight:700;font-size:26px;letter-spacing:-.02em;margin-top:2px;color:var(--ink)}
+.priceband .pbn{font-size:11px;color:var(--mut);margin-top:3px}
+.priceband .pbgrid{display:grid;grid-template-columns:1fr 1fr 1fr}
+.priceband .pbc{padding:10px 13px}
+.priceband .pbc+.pbc{border-left:1px solid var(--line)}
+.priceband .pcl{font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);font-family:"IBM Plex Mono"}
+.priceband .pcv{font-size:14px;font-weight:700;margin-top:3px}
+.priceband .pcv small{font-size:10px;color:var(--mut);font-weight:600}
+.priceband .pcs{font-size:9.5px;color:var(--mut);margin-top:1px;font-family:"IBM Plex Mono"}
+.dm .dmv small{font-size:10px;color:var(--mut);font-weight:600}
+
+.dbody{padding:18px 20px 130px;display:flex;flex-direction:column;gap:20px}
+.sec{scroll-margin-top:150px}
+.seclab{font-size:10px;letter-spacing:.11em;text-transform:uppercase;color:var(--mut);font-family:"IBM Plex Mono";margin-bottom:11px;display:flex;align-items:center;gap:9px;font-weight:600}
+.seclab .n{color:var(--green);font-weight:700}
+.seclab::after{content:"";flex:1;height:1px;background:var(--line)}
+
+/* waarom nu */
+.whywrap{display:grid;grid-template-columns:1fr 150px;gap:14px;align-items:start}
+.whylist{display:flex;flex-direction:column;gap:12px}
+.whyrow .wt{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.whyrow .wt b{font-size:13px;font-weight:600}
+.whyrow .wt .ws{font-family:"IBM Plex Mono";font-weight:600;font-size:12px;color:var(--ink-2)}
+.whyrow .wd{font-size:11.5px;color:var(--mut);margin:2px 0 5px}
+.scoreside{display:flex;flex-direction:column;gap:10px}
+.scorebox{border:1px solid var(--line);border-radius:11px;padding:11px 12px;background:var(--panel-2)}
+.scorebox .sl{font-size:9px;letter-spacing:.07em;text-transform:uppercase;color:var(--mut);font-family:"IBM Plex Mono"}
+.scorebox .sv{font-family:"Instrument Sans";font-weight:700;font-size:22px;margin-top:2px;letter-spacing:-.02em}
+.scorebox .sv small{font-size:12px;color:var(--mut);font-weight:600}
+.scorebox.sig{border-left:3px solid var(--green)}
+.scorebox.fit{border-left:3px solid var(--layers)}
+.scorebox .sbar{height:5px;background:var(--panel-3);border-radius:4px;margin-top:8px;overflow:hidden}
+.scorebox .sbar i{display:block;height:100%;border-radius:4px}
+.linkbtn{background:none;border:0;color:var(--green);font-weight:600;font-size:12.5px;cursor:pointer;padding:4px 0;display:inline-flex;align-items:center;gap:5px}
+.linkbtn:hover{color:var(--green-2)}
+.sigbreak{margin-top:12px;border:1px solid var(--line);border-radius:11px;padding:13px;background:var(--panel-2);display:none}
+.sigbreak.open{display:block}
+.sigrow{display:grid;grid-template-columns:130px 1fr 34px;gap:10px;align-items:center;padding:5px 0}
+.sigrow .sn{font-size:12px;color:var(--ink-2)}
+.sigrow .sval{font-family:"IBM Plex Mono";font-size:11.5px;font-weight:600;text-align:right}
+
+/* concept fit */
+.fitgrid{display:flex;flex-direction:column;gap:8px}
+.fitrow{display:flex;align-items:center;gap:11px;border:1px solid var(--line);border-radius:11px;padding:10px 12px;cursor:pointer;transition:.12s;background:var(--panel)}
+.fitrow:hover{border-color:var(--mut-2)}
+.fitrow.best{border-color:color-mix(in srgb,var(--layers) 40%,transparent);background:var(--panel)}
+.fitrow.active{box-shadow:0 0 0 1px currentColor inset}
+.fitrow .cdot{width:10px;height:10px;border-radius:50%;flex:none}
+.fitrow .fname{font-size:13px;font-weight:600;flex:none;width:96px}
+.fitrow .fsub{font-size:10.5px;color:var(--mut);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fitrow .fscore{font-family:"IBM Plex Mono";font-weight:600;font-size:13px}
+.fitrow .fbadge{font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:5px}
+.fitwhy{margin-top:10px;border:1px solid var(--line);border-radius:11px;padding:12px;background:var(--panel-2);font-size:12px;color:var(--ink-2)}
+.fitwhy .fwl{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);font-family:"IBM Plex Mono";margin-bottom:7px}
+.fitwhy .chips{display:flex;flex-wrap:wrap;gap:6px}
+.fitwhy .chip{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--ink-2)}
+
+/* quickscan */
+.aerialwrap{border:1px solid var(--line);border-radius:12px;overflow:hidden;position:relative;background:#3f4a3a}
+.aerialwrap svg{display:block;width:100%;height:auto}
+.aerialcap{position:absolute;left:10px;bottom:8px;font-family:"IBM Plex Mono";font-size:9.5px;color:rgba(255,255,255,.9);background:rgba(0,0,0,.35);padding:3px 8px;border-radius:6px;backdrop-filter:blur(3px)}
+.aerialtag{position:absolute;right:10px;top:8px;font-family:"IBM Plex Mono";font-size:9px;color:rgba(255,255,255,.85);background:rgba(0,0,0,.3);padding:3px 8px;border-radius:6px}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
+.check{border:1px solid var(--line);border-radius:11px;padding:11px 12px;display:flex;gap:10px;align-items:flex-start;background:var(--panel)}
+.check .cico{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;flex:none;font-weight:700;color:#fff;font-size:13px}
+.check.go .cico{background:var(--go)} .check.watch .cico{background:var(--watch)} .check.crit .cico{background:var(--crit)}
+.check .cbody .cn{font-size:12.5px;font-weight:600}
+.check .cbody .cs{font-size:10.5px;margin-top:1px}
+.check.go .cs{color:var(--go)} .check.watch .cs{color:var(--watch)} .check.crit .cs{color:var(--crit)}
+.check .cbody .cd{font-size:10.5px;color:var(--mut);margin-top:2px;line-height:1.35}
+.reportbtn{margin-top:11px;width:100%;border:1px solid var(--line-2);background:var(--panel);color:var(--ink-2);font-weight:600;font-size:12.5px;padding:10px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+.reportbtn:hover{border-color:var(--mut-2)}
+
+/* kadaster + planning two-col */
+.twocol{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.infocard{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.infocard .ictitle{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);font-family:"IBM Plex Mono";padding:10px 13px;background:var(--panel-2);border-bottom:1px solid var(--line);font-weight:600}
+.irow{display:flex;justify-content:space-between;gap:10px;padding:8px 13px;font-size:12px}
+.irow+.irow{border-top:1px solid var(--line)}
+.irow .il{color:var(--mut)}
+.irow .iv{font-weight:600;text-align:right;color:var(--ink)}
+.irow .iv.ok{color:var(--go)}
+
+/* verdict + cta */
+.verdict{display:flex;align-items:center;gap:13px;border-radius:13px;padding:14px 15px}
+.verdict.go{background:color-mix(in srgb,var(--go) 9%,var(--panel));border:1px solid color-mix(in srgb,var(--go) 28%,transparent)}
+.verdict.watch{background:color-mix(in srgb,var(--watch) 10%,var(--panel));border:1px solid color-mix(in srgb,var(--watch) 30%,transparent)}
+.verdict.crit{background:color-mix(in srgb,var(--crit) 8%,var(--panel));border:1px solid color-mix(in srgb,var(--crit) 26%,transparent)}
+.verdict .vi{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:#fff;flex:none;font-weight:700;font-size:17px}
+.verdict.go .vi{background:var(--go)} .verdict.watch .vi{background:var(--watch)} .verdict.crit .vi{background:var(--crit)}
+.verdict .vt b{font-family:"Fraunces",serif;font-weight:600;font-size:15px;display:block}
+.verdict .vt span{font-size:12px;color:var(--ink-2)}
+
+.ctawrap{position:sticky;bottom:0;background:linear-gradient(to top,var(--panel) 76%,transparent);padding:16px 20px 18px;margin:0 -20px -130px;border-top:1px solid var(--line)}
+.cta{width:100%;background:var(--green-cta);color:#fff;border:0;border-radius:12px;padding:15px;font-family:"Instrument Sans";font-weight:700;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 6px 20px rgba(18,58,37,.25);transition:.14s}
+.cta:hover{background:#0e3020}
+.cta.done{background:color-mix(in srgb,var(--go) 14%,var(--panel));color:var(--go);border:1px solid color-mix(in srgb,var(--go) 34%,transparent);box-shadow:none;cursor:default}
+.ctasub{text-align:center;font-size:11px;color:var(--mut);margin-top:8px;font-family:"IBM Plex Mono"}
+
+/* toast */
+.toastwrap{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:60;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{background:var(--nav);color:#fff;border-radius:12px;padding:13px 18px;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:12px;font-size:13.5px;opacity:0;transform:translateY(12px);transition:.28s;max-width:460px}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast .tic{width:30px;height:30px;border-radius:8px;background:var(--green-bar);color:#08130c;display:grid;place-items:center;flex:none}
+.toast b{font-weight:700}
+.toast .tsub{color:#b6c4bb;font-size:11.5px}
+
+@media (max-width:1360px){ .main{grid-template-columns:340px 1fr 400px} }
+@media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="nav">
+    <button class="brandbtn" id="navBrand" title="TODAY · Acquisitie-Radar"><span class="logo"><b>TODAY.</b></span></button>
+    <span class="vdiv"></span>
+    <span class="app-name">Acquisitie-Radar</span>
+    <div class="steps" id="steps">
+      <button class="step on" data-ph="1"><span class="sn">01</span>Ontdekken</button>
+      <button class="step" data-ph="2"><span class="sn">02</span>Locatie</button>
+      <button class="step" data-ph="3"><span class="sn">03</span>Kavel &amp; Kadaster</button>
+      <button class="step last" data-ph="4"><span class="sn">→ 04</span>Massastudie</button>
+    </div>
+    <div class="right">
+      <button class="ic" id="searchBtn" title="Zoeken"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></button>
+      <button class="ic" title="Meldingen"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0"/></svg><span class="bdot">3</span></button>
+      <div class="user"><span class="ava">RB</span><span class="uname"><b>Robert van Beilen</b><span>Sentira</span></span><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div>
+    </div>
+  </nav>
+
+  <div class="main">
+    <!-- FEED -->
+    <aside class="col feed">
+      <div class="feedhead">
+        <h1>Kansen</h1>
+        <div class="sub"><b id="totCount">347</b> kansen in Nederland</div>
+      </div>
+      <div class="tabs" id="tabs">
+        <button class="tab on" data-con="alle">Alle <span class="ct">347</span></button>
+        <button class="tab" data-con="layers"><span class="dot" style="background:var(--layers)"></span>Layers <span class="ct">142</span></button>
+        <button class="tab" data-con="storage"><span class="dot" style="background:var(--storage)"></span>Storage Club <span class="ct">98</span></button>
+        <button class="tab" data-con="urban"><span class="dot" style="background:var(--urban)"></span>Urban Miles <span class="ct">107</span></button>
+      </div>
+      <div class="feedctl">
+        <div class="selwrap"><span class="lbl">Sorteren op</span>
+          <select id="sortSel">
+            <option value="score">Score (hoog → laag)</option>
+            <option value="nieuw">Nieuwste eerst</option>
+            <option value="signaal">Signaalscore</option>
+            <option value="fit">Fit-score</option>
+            <option value="prijs">Richtprijs (laag → hoog)</option>
+            <option value="perm2">€/m² (laag → hoog)</option>
+          </select></div>
+        <div class="selwrap"><span class="lbl">Richtprijs</span>
+          <select id="priceSel">
+            <option value="alle">Alle prijzen</option>
+            <option value="lt10">&lt; € 10 M</option>
+            <option value="10-20">€ 10–20 M</option>
+            <option value="20-35">€ 20–35 M</option>
+            <option value="gt35">&gt; € 35 M</option>
+          </select></div>
+        <button class="fbtn" id="filterBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h18M6 12h12M10 19h4"/></svg>Meer</button>
+      </div>
+      <div class="newbanner">
+        <span class="spark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18"/></svg></span>
+        <div><b id="newBannerN">24 nieuwe kansen sinds je vorige bezoek</b><span>Bijgewerkt 08:42 · laatste scan vandaag</span></div>
+      </div>
+      <div class="cards" id="cards"></div>
+      <button class="loadmore" id="loadMore">Meer kansen laden <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></button>
+    </aside>
+
+    <!-- MAP -->
+    <div class="mapcol">
+      <div id="map"></div>
+      <div class="mapctl">
+        <button class="mapbtn" data-map="lagen"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5" opacity=".5"/></svg>Percelen</button>
+        <button class="mapbtn" data-map="heatmap"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" opacity=".4"/></svg>Heatmap</button>
+        <button class="mapbtn" data-map="gebied"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 3"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>Gebied tekenen</button>
+      </div>
+      <div class="maplabel"><span class="live"></span>Nederland · live scan 07:00</div>
+      <div class="mtip" id="mtip"><div class="mtn"></div><div class="mtm"></div></div>
+      <div class="maplegend2"><span class="mll">Score</span><span class="mn">55</span><span class="grad"></span><span class="mx">95</span></div>
+      <div class="zoomctl"><button id="zin">+</button><button id="zout">−</button></div>
+      <div class="statpill" id="statpill"></div>
+    </div>
+
+    <!-- DRAWER -->
+    <aside class="col drawercol" id="drawer"><div class="drawer-empty">Selecteer een kans om het detail te openen.</div></aside>
+  </div>
+</div>
+<div class="toastwrap" id="toastwrap"></div>
+
+<script>
+const CC={layers:"#6d4ac2",storage:"#a9781b",urban:"#0d8790"};
+const CN={layers:"Layers",storage:"Storage Club",urban:"Urban Miles"};
+const CDESC={layers:"Light industrial / bedrijfsverzamelgebouw",storage:"Self-storage",urban:"Urban / last-mile logistiek"};
+const CFITWHY={
+ layers:["kavelgrootte","milieucategorie 3.1–3.2","unit-mix 250–800 m²","bereikbaarheid","regionale vraag light industrial"],
+ storage:["verzorgingsgebied","bevolkingsdichtheid","zichtbaarheid vanaf de weg","bereikbaarheid","vraagoverschot self-storage"],
+ urban:["nabijheid stedelijk kerngebied","ontsluiting ring","venstertijden","last-mile dekking","e-commerce vraag"]
+};
+
+/* geometry */
+const OUTER=[[3.38,51.53],[3.70,51.66],[4.02,51.98],[4.28,52.10],[4.55,52.46],[4.72,52.73],[4.76,52.96],[5.05,52.93],[5.34,53.06],[5.78,53.30],[6.24,53.42],[6.86,53.44],[7.12,53.24],[7.04,52.96],[7.07,52.62],[7.05,52.40],[6.83,52.20],[6.76,51.87],[6.17,51.86],[6.22,51.50],[6.08,51.24],[5.95,51.03],[6.03,50.92],[5.90,50.75],[5.68,50.82],[5.78,51.10],[5.24,51.27],[4.93,51.42],[4.53,51.43],[4.28,51.36],[3.92,51.44],[3.53,51.40],[3.36,51.44]];
+const IJSSEL=[[5.04,52.56],[5.30,52.43],[5.56,52.55],[5.73,52.72],[5.62,52.90],[5.40,52.99],[5.14,52.86],[5.02,52.69]];
+const WADDEN=[
+ [[4.71,53.00],[4.74,53.11],[4.84,53.18],[4.91,53.14],[4.86,53.02],[4.78,52.98]],
+ [[4.98,53.24],[5.05,53.31],[5.15,53.31],[5.10,53.25]],
+ [[5.20,53.36],[5.31,53.43],[5.56,53.45],[5.50,53.38]],
+ [[5.62,53.43],[5.71,53.47],[5.87,53.46],[5.82,53.42]],
+ [[6.05,53.45],[6.12,53.49],[6.28,53.48],[6.25,53.44]]
+];
+const PROV=[["Groningen",6.78,53.18],["Fryslân",5.72,53.06],["Drenthe",6.66,52.86],["Overijssel",6.45,52.44],["Flevoland",5.56,52.53],["Gelderland",6.02,52.02],["Noord-Holland",4.78,52.60],["Zuid-Holland",4.36,51.99],["Zeeland",3.72,51.47],["Noord-Brabant",5.12,51.63],["Limburg",5.98,51.20]];
+const CITYPTS=[["Amsterdam",4.90,52.37],["Rotterdam",4.48,51.92],["Den Haag",4.30,52.08],["Utrecht",5.11,52.09],["Eindhoven",5.47,51.44],["Groningen",6.57,53.22],["Arnhem",5.90,51.98],["Zwolle",6.09,52.51],["Breda",4.78,51.59],["Nijmegen",5.86,51.84],["Tilburg",5.09,51.56],["Enschede",6.90,52.22],["Apeldoorn",5.97,52.21],["Amersfoort",5.39,52.16],["Venlo",6.17,51.37]];
+const HW=[
+ ["A2",[[4.90,52.37],[5.11,52.09],[5.30,51.69],[5.47,51.44],[5.70,50.90]]],
+ ["A1",[[4.90,52.37],[5.39,52.16],[5.97,52.21],[6.16,52.25],[6.79,52.27]]],
+ ["A12",[[4.30,52.08],[5.11,52.09],[5.90,51.98]]],
+ ["A15",[[4.48,51.92],[5.20,51.87],[5.86,51.84]]],
+ ["A16",[[4.48,51.92],[4.62,51.75],[4.78,51.59]]],
+ ["A27",[[52.09],[5.11,52.09]]].length?["A27",[[5.11,52.09],[5.00,51.85],[4.78,51.59]]]:null,
+ ["A28",[[5.11,52.09],[5.39,52.16],[6.09,52.51],[6.57,53.22]]],
+ ["A4",[[4.90,52.37],[4.30,52.08],[4.48,51.92]]]
+].filter(Boolean);
+const K=Math.cos(52*Math.PI/180);
+function cat(pts,k=16){const P=[pts[pts.length-1],...pts,pts[0],pts[1]];const o=[];
+  for(let i=1;i<P.length-2;i++){const p0=P[i-1],p1=P[i],p2=P[i+1],p3=P[i+2];
+    for(let j=0;j<k;j++){const t=j/k,t2=t*t,t3=t2*t;
+      o.push([.5*((2*p1[0])+(-p0[0]+p2[0])*t+(2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2+(-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t3),
+              .5*((2*p1[1])+(-p0[1]+p2[1])*t+(2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2+(-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3)]);}}
+  return o;}
+
+/* ===== DATA ===== */
+const CITYXY={Amsterdam:[4.90,52.37],Rotterdam:[4.48,51.92],"Den Haag":[4.30,52.08],Utrecht:[5.11,52.09],Eindhoven:[5.47,51.44],Tilburg:[5.09,51.56],Breda:[4.78,51.59],Arnhem:[5.90,51.98],Nijmegen:[5.86,51.84],Apeldoorn:[5.97,52.21],Zwolle:[6.09,52.51],Deventer:[6.16,52.25],Amersfoort:[5.39,52.16],Almere:[5.22,52.37],Groningen:[6.57,53.22],Enschede:[6.90,52.22],Venlo:[6.17,51.37],Roosendaal:[4.46,51.53],Dordrecht:[4.67,51.81],"Den Bosch":[5.30,51.70],Ede:[5.67,52.04],Zaanstad:[4.83,52.44],Haarlem:[4.64,52.38],Hengelo:[6.79,52.27],Helmond:[5.66,51.48],Oss:[5.52,51.77],Gouda:[4.71,52.01],Hoofddorp:[4.69,52.30],Alkmaar:[4.75,52.63],Zoetermeer:[4.49,52.06]};
+function rng32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+// [name,city,prov,postcode,concept,score,signal,fit,dagen,ha,gia,why]
+const SEED=[
+ ["Bedrijventerrein Westpoort","Deventer","Overijssel","7418 AJ","layers",92,94,88,2,8.4,3100,"Lage bebouwingsgraad + recente eigendomswijziging"],
+ ["Trefpunt Noord","Apeldoorn","Gelderland","7327 AB","storage",88,89,85,1,6.2,2400,"Onderbenutting + sterke vraag in verzorgingsgebied"],
+ ["Kanaalzone Oost","Utrecht","Utrecht","3542 AD","urban",86,87,84,0,7.1,1800,"Eigendomswijziging + intensiveringspotentieel"],
+ ["Bedrijvenpark A15","Nijmegen","Gelderland","6673 DL","layers",84,83,82,3,10.3,0,"Lage bebouwingsgraad + verouderd vastgoed"],
+ ["Schil West","Amersfoort","Utrecht","3812 PA","urban",83,85,78,2,5.4,2600,"Margedruk eigenaar + A28-ligging"],
+ ["De Wieken-Zuid","Tilburg","Noord-Brabant","5048 AC","layers",81,80,80,5,12.0,4200,"Herbestemmingsruimte + courante unit-vraag"],
+ ["Hoefweg-Kavel","Zoetermeer","Zuid-Holland","2718 SB","storage",80,82,74,1,3.1,900,"Zichtlocatie + structureel vraagoverschot"],
+ ["Spoorzone Blok C","Zwolle","Overijssel","8013 RW","layers",79,78,79,4,7.8,3400,"Transformatie-ambitie + verdichtingsmarge"],
+ ["Ring Zuid-Oost","Rotterdam","Zuid-Holland","3079 DZ","urban",78,80,73,0,6.0,2200,"Last-mile positie + margedruk eigenaar"],
+ ["Vossenberg-Rand","Tilburg","Noord-Brabant","5015 BC","layers",77,76,77,7,9.1,1200,"Onderbenutting + goede A58-ontsluiting"],
+ ["Cartesius-Rand","Utrecht","Utrecht","3534 AB","storage",76,74,79,2,2.7,1100,"Gemengd-stedelijke transformatie"],
+ ["Lage Weide-Kade","Utrecht","Utrecht","3542 AR","storage",75,76,73,6,4.3,1600,"Haventerrein + herstructurering"],
+ ["Ekkersrijt-Poort","Eindhoven","Noord-Brabant","5692 EH","layers",75,74,76,3,11.4,5100,"Sterke Brainport-vraag + kavelbundeling"],
+ ["De Hurk-West","Eindhoven","Noord-Brabant","5651 GH","urban",74,76,71,8,5.6,2900,"Binnenstedelijk logistiek + margedruk"],
+ ["Kellebeek-Kavel","Roosendaal","Noord-Brabant","4703 RK","layers",73,72,74,4,8.7,0,"Verouderd terrein + eigenaar bouwt af"],
+ ["Dordtse Kil IV-rest","Dordrecht","Zuid-Holland","3316 GJ","layers",73,73,72,2,13.5,0,"Restkavel op logistiek knooppunt"],
+ ["Isselt-Blok","Amersfoort","Utrecht","3812 RH","urban",72,73,70,10,4.1,1700,"Herstructurering + OV-bereikbaarheid"],
+ ["Winkelsteeg-Zoom","Nijmegen","Gelderland","6534 AB","storage",72,70,74,1,3.4,700,"Groeiend verzorgingsgebied + restkavel"],
+ ["Rieteweg-Kade","Zwolle","Overijssel","8011 AB","urban",71,72,69,5,4.8,2100,"Kadelocatie + intensiveringsruimte"],
+ ["De Vaart 3-4","Almere","Flevoland","1332 EA","layers",71,70,71,3,14.0,0,"Ruime kavel + snelle uitgifte mogelijk"],
+ ["Euvelgunne-Oost","Groningen","Groningen","9723 CR","layers",70,71,68,12,9.5,2400,"Herstructurering noordelijk knooppunt"],
+ ["Marslanden-Rand","Zwolle","Overijssel","8024 AB","storage",69,68,70,6,2.9,600,"Vraagoverschot + zichtlocatie A28"],
+ ["De Brand-Kavel","Den Bosch","Noord-Brabant","5222 AL","urban",69,70,67,9,5.2,1900,"Last-mile positie + A2-ligging"],
+ ["Twentekanaal-Blok","Hengelo","Overijssel","7554 RR","layers",68,68,67,14,7.3,2800,"Verouderd, onderbenut kavel"],
+ ["Vijfsluizen-Rand","Rotterdam","Zuid-Holland","3125 AE","urban",68,70,64,4,5.9,2500,"Havenrand + margedruk"],
+ ["Hoogeind-West","Helmond","Noord-Brabant","5701 PB","layers",67,66,68,11,8.0,1500,"Courant knooppunt + herbestemmingsmarge"],
+ ["Moerdijk-Poort","Roosendaal","Noord-Brabant","4761 RS","urban",66,68,62,7,10.8,0,"Grootschalige logistiek + reguliere setting"],
+ ["Elzenburg-Kade","Oss","Noord-Brabant","5347 JV","storage",66,64,68,15,3.0,500,"Groeiend verzorgingsgebied"],
+ ["Goudse Poort-rest","Gouda","Zuid-Holland","2809 PA","storage",65,65,64,8,2.5,800,"Zichtlocatie + beperkte herbestemming"],
+ ["A1 Bedrijvenpark","Deventer","Overijssel","7423 AA","layers",64,63,65,18,9.9,0,"Vers uitgegeven zone + tweede-ring vraag"],
+ ["Businesspark A2","Den Bosch","Noord-Brabant","5231 DD","layers",63,62,64,6,6.7,2000,"Redelijke fit + matige verdichtingsmarge"],
+ ["Boldershoek-Kavel","Enschede","Overijssel","7521 AN","urban",62,63,60,20,5.0,1600,"Randligging + beperkte vraag"],
+ ["Trade Port Noord-rest","Venlo","Limburg","5928 PN","layers",61,60,62,9,12.6,0,"Logistiek knooppunt + reguliere concurrentie"],
+ ["Waarderpolder-Zoom","Haarlem","Noord-Holland","2031 CC","layers",60,61,58,13,4.6,1900,"Verouderd terrein + versnipperd eigendom"],
+ ["Hoorn 80-Kavel","Alkmaar","Noord-Holland","1704 RT","storage",58,58,57,22,2.3,400,"Beperkte schaal + rendementsgevoelig"],
+ ["Zuiderpark-Rand","Almere","Flevoland","1339 AB","urban",57,58,55,16,4.4,1200,"Weinig urgentie + acceptabele fit"]
+];
+const SECTIE=["A","B","C","D","E","F","G","H","K"];
+function chk(status,label,desc){return{status,label,desc}}
+function buildQuickscan(d,r){
+  const con=d.concept, randstad=["Zuid-Holland","Noord-Holland","Utrecht"].includes(d.province);
+  // netcapaciteit: storage low demand -> mostly go; urban/layers randstad worse
+  let net;
+  if(con==="storage") net = r()<.12?chk("watch","Aandacht","Beperkte restcapaciteit — lage aansluitwaarde vangt dit op"):chk("go","Voldoende","Lage aansluitwaarde — geen knelpunt");
+  else{const x=r(); net = (randstad&&x<.4)?chk("crit","Kritiek","Geen restcapaciteit — wachtrij netbeheerder"):x<.5?chk("watch","Aandacht","Beperkte restcapaciteit — positie in wachtrij"):chk("go","Voldoende","Voldoende netcapaciteit in dit vak");}
+  let stik; {const x=r(); stik = x<.1?chk("crit","Kritiek","Natura 2000 nabij — depositietoets kritisch"):x<.28?chk("watch","Aandacht","Depositietoets vereist (<3 km Natura 2000)"):chk("go","Geen directe belemmering",">3 km van Natura 2000");}
+  let mil; {const x=r(); mil = x<.14?chk("crit","Kritiek","Milieucontour / geluid beperkt programma"):x<.38?chk("watch","Aandacht","Geluidstoets vereist bij intensivering"):chk("go","Geen directe belemmering","Passend binnen milieucategorie");}
+  let bod; {const x=r(); bod = x<.16?chk("crit","Kritiek","Bodemsanering waarschijnlijk"):x<.42?chk("watch","Historische aandacht","Verkennend bodemonderzoek nodig"):chk("go","Geen directe belemmering","Geen bodemhistorie bekend");}
+  return {netcapaciteit:net,stikstof:stik,milieuGeluid:mil,bodem:bod};
+}
+function verdictOf(q){const st=[q.netcapaciteit.status,q.stikstof.status,q.milieuGeluid.status,q.bodem.status];
+  const crit=st.filter(x=>x==="crit").length,watch=st.filter(x=>x==="watch").length;
+  if(crit)return{c:"crit",i:"✕",t:"Nog niet gekwalificeerd",s:"Eerst nader onderzoek."};
+  if(watch>=1)return{c:"watch",i:"!",t:"Gekwalificeerd met aandacht",s:"Aannames meenemen naar de massastudie."};
+  return{c:"go",i:"✓",t:"Gekwalificeerd",s:"Klaar voor de massastudie."};
+}
+// indicatieve grondprijs €/m² bedrijventerrein, per provincie (2026, richtwaarden)
+const PROVBASE={"Noord-Holland":335,"Zuid-Holland":320,"Utrecht":300,"Flevoland":195,"Gelderland":235,"Noord-Brabant":255,"Overijssel":180,"Limburg":170,"Groningen":140,"Friesland":140,"Drenthe":140,"Zeeland":160};
+const DATA=SEED.map((s,i)=>{
+  const [name,city,province,postcode,concept,score,signal,fit,dagen,ha,gia,why]=s;
+  const id=i+1; const r=rng32(id*97+13);
+  const base=CITYXY[city]||[5.2,52.1]; const lon=base[0]+(r()-.5)*0.10, lat=base[1]+(r()-.5)*0.07;
+  // signals around signal score
+  const jig=(c)=>Math.max(40,Math.min(99,Math.round(signal+c)));
+  const signals={herbestemmingsruimte:jig((r()-.4)*16),onderbenutting:jig((r()-.3)*18),eigendomsdynamiek:jig((r()-.35)*20),financieleDruk:jig((r()-.5)*22),vraagdruk:jig((r()-.35)*16)};
+  // fit alternatives
+  const others=["layers","storage","urban"].filter(c=>c!==concept);
+  const fits={}; fits[concept]=fit; others.forEach(c=>fits[c]=Math.max(45,Math.min(fit-4,Math.round(fit-6-r()*22))));
+  const q= id===1 ? {netcapaciteit:chk("go","Voldoende","Voldoende netcapaciteit — Liander-vak met ruimte"),stikstof:chk("go","Geen directe belemmering",">4 km van Natura 2000"),milieuGeluid:chk("go","Geen directe belemmering","Passend binnen milieucategorie 3.2"),bodem:chk("watch","Historische aandacht","Verkennend bodemonderzoek nodig — voormalig metaalbedrijf")} : buildQuickscan({concept,province},r);
+  const verdict=verdictOf(q);
+  const hoogte=concept==="storage"?[12,14,16][Math.floor(r()*3)]:concept==="urban"?[12,16,24][Math.floor(r()*3)]:[20,24,28][Math.floor(r()*3)];
+  const beb=[50,55,60,70][Math.floor(r()*4)];
+  const milcat=concept==="urban"?["3.2","4.1"][Math.floor(r()*2)]:["3.1","3.2"][Math.floor(r()*2)];
+  const planning={bestemming:concept==="urban"?"Bedrijventerrein / logistiek":"Bedrijventerrein",planstatus:r()<.8?"Vastgesteld":"Ontwerp",bouwhoogte:hoogte,bebouwing:beb,milieucat:milcat};
+  const eigendom= r()<.7?"Eén eigenaar":"Versnipperd ("+(2+Math.floor(r()*3))+" partijen)";
+  const kadaster={gemeente:city,sectie:SECTIE[Math.floor(r()*SECTIE.length)],perceel:String(1000+Math.floor(r()*8999)),eigendom,rechten:r()<.85?"Geen bekende blokkade":"Zakelijk recht — te toetsen",erfpacht:r()<.2?"Ja (gemeente)":"Nee",hypotheek:r()<.75?"Geen signaal":"Hypotheeksignaal — te verifiëren"};
+  const tenure=kadaster.erfpacht==="Nee"?"Eigen grond":"Erfpacht";
+  const hw=["A1","A2","A4","A12","A15","A16","A27","A28","A58","A67"][Math.floor(r()*10)];
+  const location={snelweg:hw,afstandSnelweg:(1.2+r()*6).toFixed(1),afstandCentrum:(1.5+r()*7).toFixed(1),ov:["Goed","Redelijk","Beperkt"][Math.floor(r()*3)],overstroming:["Laag","Laag","Middel"][Math.floor(r()*3)]};
+  // indicatieve richtprijs (off-market → schatting o.b.v. vergelijkbare transacties, geen vraagprijs)
+  const cf=concept==="urban"?1.15:concept==="storage"?0.95:1.0;
+  const perM2=Math.round(((PROVBASE[province]||200)*cf*(0.85+r()*0.30))/5)*5;
+  const kavelM2=Math.round(ha*10000);
+  const prijs=perM2*kavelM2;
+  const potBVO=Math.round(kavelM2*(beb/100));
+  const perBVO=Math.round(prijs/potBVO);
+  return {id,name,city,province,postcode,lon,lat,concept,score,signal,fit,dagen,isNew:dagen<=4,siteAreaHa:ha,existingGIA:gia,kavelM2,ownership:eigendom,tenure,whyNow:why,signals,fits,quickscan:q,verdict,planning,kadaster,location,prijs,perM2,potBVO,perBVO};
+});
+
+// hero (Deventer Westpoort) — exact values per brief
+(function(){const h=DATA.find(d=>d.id===1);
+  h.ownership="Eén eigenaar";h.tenure="Eigen grond";
+  h.kadaster={gemeente:"Deventer",sectie:"G",perceel:"4821",eigendom:"Eén eigenaar",rechten:"Geen bekende blokkade",erfpacht:"Nee",hypotheek:"Geen signaal"};
+  h.planning={bestemming:"Bedrijventerrein",planstatus:"Vastgesteld",bouwhoogte:24,bebouwing:60,milieucat:"3.2"};
+  h.location={snelweg:"A1",afstandSnelweg:"4,2",afstandCentrum:"3,1",ov:"Goed",overstroming:"Laag"};
+  h.kavelM2=84000;h.perM2=185;h.prijs=185*84000;h.potBVO=50400;h.perBVO=Math.round(h.prijs/h.potBVO);
+})();
+
+/* ===== STATE ===== */
+let fCon="alle",sortBy="score",fText="",fPrice="alle",selId=null,curPhase=1;
+const PRICE_RANGES={alle:[0,Infinity],lt10:[0,10e6],"10-20":[10e6,20e6],"20-35":[20e6,35e6],gt35:[35e6,Infinity]};
+const favourites=new Set([2,5,9,13]); const qualified=new Set();
+const SIGLAB=[["herbestemmingsruimte","Herbestemmingsruimte"],["onderbenutting","Onderbenutting"],["eigendomsdynamiek","Eigendomsdynamiek"],["financieleDruk","Financiële druk"],["vraagdruk","Vraagdruk"]];
+const WHYSIG={ "Lage bebouwingsgraad":["onderbenutting"], };
+
+// score kleurschaal: rood (zwak) → groen (sterk)
+function scoreTier(v){ return v>=85?0 : v>=75?1 : v>=66?2 : v>=58?3 : 4; }
+const TIERFILL=["#1f7a43","#4e8c2f","#b07d12","#c25a1f","#b23a26"];
+function scoreFill(v){return TIERFILL[scoreTier(v)];}
+function scoreText(v){return "#ffffff";}
+
+function visible(){
+  const pr=PRICE_RANGES[fPrice];
+  let v=DATA.filter(d=> (fCon==="alle"||d.concept===fCon) && d.prijs>=pr[0] && d.prijs<pr[1]);
+  if(fText){const q=fText.toLowerCase();v=v.filter(d=>(d.name+" "+d.city+" "+d.province+" "+CN[d.concept]+" "+d.location.snelweg).toLowerCase().includes(q));}
+  v.sort((a,b)=> sortBy==="nieuw"?(a.dagen-b.dagen)||b.score-a.score : sortBy==="signaal"?b.signal-a.signal : sortBy==="fit"?b.fit-a.fit : sortBy==="prijs"?a.prijs-b.prijs : sortBy==="perm2"?a.perM2-b.perM2 : b.score-a.score);
+  return v;
+}
+
+/* ===== GAUGE ===== */
+function gauge(v,size){const R=size/2-4,cx=size/2,cy=size/2,C=scoreFill(v),txtC=v>=60?"var(--ink)":"var(--mut)";
+  const frac=v/100, a0=-Math.PI/2, a1=a0+frac*2*Math.PI, big=frac>.5?1:0;
+  const pt=a=>[cx+R*Math.cos(a),cy+R*Math.sin(a)];
+  const [x0,y0]=pt(a0),[x1,y1]=pt(a1-0.0001);
+  const track=`<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#eceee9" stroke-width="${size>=54?4:3.5}"/>`;
+  const arc= v>=99.9? `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${C}" stroke-width="${size>=54?4:3.5}"/>`
+    : `<path d="M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${R} ${R} 0 ${big} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}" fill="none" stroke="${C}" stroke-width="${size>=54?4:3.5}" stroke-linecap="round"/>`;
+  const fs=size>=54?19:size>=48?17:15;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${track}${arc}<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" font-family="Instrument Sans" font-weight="700" font-size="${fs}" fill="${txtC}">${v}</text></svg>`;
+}
+
+/* ===== FEED ===== */
+function cardHTML(d){
+  const fav=favourites.has(d.id), qd=qualified.has(d.id);
+  return `<div class="card ${d.id===selId?'sel':''}" data-id="${d.id}">
+    <button class="fav ${fav?'on':''}" data-fav="${d.id}" title="Shortlist" onclick="event.stopPropagation()"><svg width="15" height="15" viewBox="0 0 24 24" fill="${fav?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><path d="M12 3l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 18.8 6.2 21.9l1.1-6.5L2.6 9.8l6.5-.9z"/></svg></button>
+    <div class="top">
+      <div class="gauge" style="width:54px;height:54px">${gauge(d.score,54)}</div>
+      <div class="cinfo">
+        <div class="crow"><h3>${d.name}</h3><div class="loc">${d.city}, ${d.province}</div></div>
+        <div class="crow2"><span class="cbadge ${d.concept}">${CN[d.concept]}</span>${d.isNew?'<span class="newtag">NIEUW</span>':''}${qd?'<span class="f2tag">→ Fase 2</span>':''}</div>
+      </div>
+    </div>
+    <div class="why"><div class="wl">Waarom nu</div><p>${d.whyNow}</p></div>
+    <div class="cmetrics">
+      <div class="cmbar"><div class="bl"><span>Signaal</span><span>${d.signal}</span></div><div class="bar"><i style="width:${d.signal}%;background:var(--green-bar)"></i></div>
+        <div class="bl"><span>Fit</span><span>${d.fit}</span></div><div class="bar"><i style="width:${d.fit}%;background:${CC[d.concept]}"></i></div></div>
+      <div class="cm"><span class="cml">Kavel</span><span class="cmv">${fmtHa(d.siteAreaHa)} ha</span></div>
+      <div class="cm"><span class="cml">Richtprijs</span><span class="cmv">${fmtEurM(d.prijs)}</span><span class="cmsub">${fmtEurM2(d.perM2)}</span></div>
+    </div>
+  </div>`;
+}
+function fmtHa(v){return v.toFixed(1).replace('.',',');}
+function fmtEurM(v){return '€ '+(v/1e6).toFixed(1).replace('.',',')+' M';}
+function fmtEurM2(v){return '€ '+v.toLocaleString('nl-NL')+'/m²';}
+function fmtEur0(v){return '€ '+v.toLocaleString('nl-NL');}
+function fmtN(v){return v.toLocaleString('nl-NL');}
+function renderCards(){
+  const v=visible();const c=document.getElementById("cards");
+  c.innerHTML=v.map(cardHTML).join("")||`<div style="padding:26px;text-align:center;color:var(--mut)">Geen kansen voor deze selectie.</div>`;
+  c.querySelectorAll(".card").forEach(el=>el.addEventListener("click",()=>select(+el.dataset.id,'card')));
+  c.querySelectorAll(".fav").forEach(b=>b.addEventListener("click",()=>toggleFav(+b.dataset.fav)));
+}
+
+/* ===== MAP (Leaflet + PDOK) ===== */
+let LMAP=null, markerLayer=null, heatGroup=null, kadasterLayer=null, heat=false, kadOn=false, markerById={};
+function scoreIcon(d){
+  const sel=d.id===selId, fill=scoreFill(d.score), sz=sel?42:34;
+  const html=`<div class="lmk${sel?' sel':''}" style="--mc:${fill}"><span>${d.score}</span>${qualified.has(d.id)?'<i class="q"></i>':''}</div>`;
+  return L.divIcon({html,className:'lmk-wrap',iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]});
+}
+function buildMap(){
+  if(LMAP){LMAP.invalidateSize();renderPins();return;}
+  LMAP=L.map('map',{center:[52.15,5.45],zoom:7,zoomControl:false,attributionControl:true});
+  LMAP.attributionControl.setPrefix('');
+  L.tileLayer('https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/standaard/EPSG:3857/{z}/{x}/{y}.png',{minZoom:6,maxZoom:19,attribution:'Kaart &copy; PDOK / Kadaster — BRT-Achtergrondkaart'}).addTo(LMAP);
+  kadasterLayer=L.tileLayer.wms('https://service.pdok.nl/kadaster/kadastralekaart/wms/v5_0',{layers:'Perceel',format:'image/png',transparent:true,version:'1.3.0',opacity:.75,attribution:'Percelen: Kadaster'});
+  LMAP.createPane('heat');LMAP.getPane('heat').style.zIndex=350;LMAP.getPane('heat').style.pointerEvents='none';
+  heatGroup=L.layerGroup();
+  markerLayer=L.layerGroup().addTo(LMAP);
+  renderPins();
+}
+function renderPins(){
+  if(!LMAP)return;
+  markerLayer.clearLayers();markerById={};
+  visible().forEach(d=>{
+    const m=L.marker([d.lat,d.lon],{icon:scoreIcon(d),zIndexOffset:d.id===selId?1000:(d.isNew?200:0)});
+    m.bindTooltip(`<b>${d.name}</b><span class="tm"><i>score ${d.score}</i><i style="color:${CC[d.concept]}">${CN[d.concept]}</i><i>${fmtEurM(d.prijs)}</i></span>`,{direction:'top',offset:[0,-6],className:'lmk-tip'});
+    m.on('click',()=>select(d.id,'map'));
+    m.addTo(markerLayer);markerById[d.id]=m;
+  });
+  heatGroup.clearLayers();
+  if(heat){
+    visible().forEach(d=>L.circleMarker([d.lat,d.lon],{pane:'heat',radius:26,stroke:false,fillColor:scoreFill(d.score),fillOpacity:.24}).addTo(heatGroup));
+    if(!LMAP.hasLayer(heatGroup))heatGroup.addTo(LMAP);
+  } else if(LMAP.hasLayer(heatGroup)){LMAP.removeLayer(heatGroup);}
+}
+function panTo(d){ if(LMAP)LMAP.panTo([d.lat,d.lon],{animate:true}); }
+
+/* ===== STAT PILL ===== */
+function renderPill(){
+  const nNew=DATA.filter(d=>d.isNew).length, top=Math.max(...DATA.map(d=>d.score));
+  const qual=DATA.filter(d=>d.verdict.c!=="crit").length;
+  const items=[["#3a9c63",nNew,"Nieuw","M12 3v18M3 12h18"],["#5aa877",top,"Hoogste score","M4 20l5-9 4 5 3-7 4 11"],["#b8791b",qualified.size,"Doorgezet","M20 6L9 17l-5-5"],["#8b949d",favourites.size,"Shortlist","M12 3l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 18.8 6.2 21.9l1.1-6.5L2.6 9.8l6.5-.9z"]];
+  document.getElementById("statpill").innerHTML=items.map(([c,v,l,p])=>
+    `<div class="st"><span class="sic" style="background:color-mix(in srgb,${c} 22%,transparent);color:${c}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="${p}"/></svg></span><div><div class="sv">${v}</div><div class="sl">${l}</div></div></div>`).join("");
+}
+
+/* ===== DRAWER ===== */
+function chkClass(s){return s==="go"?"go":s==="watch"?"watch":"crit"}
+function chkGlyph(s){return s==="go"?"✓":s==="watch"?"!":"✕"}
+function drawerHTML(d){
+  const q=d.quickscan, v=d.verdict, fav=favourites.has(d.id), qd=qualified.has(d.id);
+  const whyItems=[["Lage bebouwingsgraad",`${d.planning.bebouwing-Math.round((d.planning.bebouwing-32)) }% bebouwd op A-locatie`,d.signals.onderbenutting],
+    ["Eigendomsdynamiek",d.signals.eigendomsdynamiek>78?"Eigendomsoverdracht recent geregistreerd":"Bestuurswisseling gesignaleerd",d.signals.eigendomsdynamiek],
+    ["Planologische context",d.planning.planstatus==="Vastgesteld"?"Omgevingsplan biedt ruimte voor intensivering":"Ontwerp-omgevingsplan in procedure",d.signals.herbestemmingsruimte]];
+  // reuse hero exact numbers
+  if(d.id===1){whyItems[0][1]="32% bebouwd op A-locatie";whyItems[0][2]=91;whyItems[1][1]="Eigendomsoverdracht 14 dagen geleden";whyItems[1][2]=96;whyItems[2][1]="Bestemmingsplan biedt ruimte voor intensivering";whyItems[2][2]=87;}
+  const fitOrder=["layers","storage","urban"].sort((a,b)=> (b===d.concept?1:0)-(a===d.concept?1:0) || d.fits[b]-d.fits[a]);
+  return `<div class="dh">
+    <div class="dtop">
+      <div class="gauge" style="width:58px;height:58px;flex:none">${gauge(d.score,58)}</div>
+      <div class="dinfo">
+        <div class="dtags">${d.isNew?'<span class="newtag">NIEUW</span>':''}<span class="cbadge ${d.concept}">${CN[d.concept]}</span>${qd?'<span class="f2tag">→ Fase 2</span>':''}</div>
+        <h2>${d.name}</h2>
+        <div class="dloc"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.3 7-11a7 7 0 10-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>${d.city}, ${d.province} · ${d.postcode}</div>
+      </div>
+      <div class="dact">
+        <button class="dbtn fav ${fav?'on':''}" id="drFav" title="Shortlist"><svg width="15" height="15" viewBox="0 0 24 24" fill="${fav?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><path d="M12 3l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 18.8 6.2 21.9l1.1-6.5L2.6 9.8l6.5-.9z"/></svg></button>
+        <button class="dbtn" title="Meer"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+        <button class="dbtn" id="drClose" title="Sluiten"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      </div>
+    </div>
+    <div class="dmetrics">
+      <div class="dm"><div class="dml">Kavel</div><div class="dmv">${fmtHa(d.siteAreaHa)}<small> ha</small></div></div>
+      <div class="dm hl"><div class="dml">Richtprijs · indic.</div><div class="dmv">${fmtEurM(d.prijs)}</div></div>
+      <div class="dm"><div class="dml">€/m² kavel</div><div class="dmv">${fmtEur0(d.perM2)}</div></div>
+      <div class="dm"><div class="dml">Bestaand BVO</div><div class="dmv">${d.existingGIA?fmtN(d.existingGIA):'—'}<small>${d.existingGIA?' m²':''}</small></div></div>
+    </div>
+  </div>
+  <div class="dbody">
+    <div class="sec">
+      <div class="seclab">Prijsindicatie</div>
+      <div class="priceband">
+        <div class="pbmain"><div class="pbl">Indicatieve richtprijs</div><div class="pbv">${fmtEurM(d.prijs)}</div><div class="pbn">Geen vraagprijs — off-market schatting o.b.v. vergelijkbare transacties &amp; WOZ</div></div>
+        <div class="pbgrid">
+          <div class="pbc"><div class="pcl">€/m² kavel</div><div class="pcv">${fmtEur0(d.perM2)}</div></div>
+          <div class="pbc"><div class="pcl">Potentiële BVO</div><div class="pcv">${fmtN(d.potBVO)}<small> m²</small></div><div class="pcs">bij ${d.planning.bebouwing}% bebouwing</div></div>
+          <div class="pbc"><div class="pcl">€/m² BVO</div><div class="pcv">${fmtEur0(d.perBVO)}</div><div class="pcs">indicatief</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="sec" id="sec-locatie">
+      <div class="seclab"><span class="n">02</span> Waarom nu</div>
+      <div class="whywrap">
+        <div class="whylist">${whyItems.map(w=>`<div class="whyrow"><div class="wt"><b>${w[0]}</b><span class="ws">${w[2]}</span></div><div class="wd">${w[1]}</div><div class="bar"><i style="width:${w[2]}%;background:var(--green-bar)"></i></div></div>`).join("")}</div>
+        <div class="scoreside">
+          <div class="scorebox sig"><div class="sl">Signaalscore</div><div class="sv">${d.signal}<small> / 100</small></div><div class="sbar"><i style="width:${d.signal}%;background:var(--green-bar)"></i></div></div>
+          <div class="scorebox fit"><div class="sl">Fit-score · ${CN[d.concept]}</div><div class="sv">${d.fit}<small> / 100</small></div><div class="sbar"><i style="width:${d.fit}%;background:${CC[d.concept]}"></i></div></div>
+        </div>
+      </div>
+      <button class="linkbtn" id="sbToggle">Bekijk score-opbouw <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></button>
+      <div class="sigbreak" id="sigbreak">${SIGLAB.map(([k,l])=>`<div class="sigrow"><span class="sn">${l}</span><div class="bar"><i style="width:${d.signals[k]}%;background:var(--green-bar)"></i></div><span class="sval">${d.signals[k]}</span></div>`).join("")}</div>
+    </div>
+
+    <div class="sec">
+      <div class="seclab">Concept-fit</div>
+      <div class="fitgrid" id="fitgrid">${fitOrder.map(c=>`<div class="fitrow ${c===d.concept?'best':''} ${c===d.concept?'active':''}" data-c="${c}" style="color:${CC[c]}">
+        <span class="cdot" style="background:${CC[c]}"></span><span class="fname" style="color:var(--ink)">${CN[c]}</span>
+        <span class="fsub">${CDESC[c]}</span><span class="fscore" style="color:var(--ink)">${d.fits[c]}</span>
+        ${c===d.concept?'<span class="fbadge" style="background:'+CC[c]+'22;color:'+CC[c]+'">Beste</span>':''}</div>`).join("")}</div>
+      <div class="fitwhy" id="fitwhy"></div>
+    </div>
+
+    <div class="sec" id="sec-kavel">
+      <div class="seclab"><span class="n">03</span> Kavel- &amp; kadaster-quickscan</div>
+      <div class="aerialwrap">${aerial(d)}<div class="aerialtag mono">Kavelcontour · schematisch</div><div class="aerialcap">Perceel ${d.kadaster.gemeente} · sectie ${d.kadaster.sectie} · nr ${d.kadaster.perceel}</div></div>
+      <div class="checks">
+        ${chkCard("Netcapaciteit",q.netcapaciteit)}
+        ${chkCard("Stikstof",q.stikstof)}
+        ${chkCard("Milieu & geluid",q.milieuGeluid)}
+        ${chkCard("Bodem",q.bodem)}
+      </div>
+      <button class="reportbtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>Bekijk volledige rapporten</button>
+    </div>
+
+    <div class="sec">
+      <div class="seclab">Kadaster &amp; planologie</div>
+      <div class="twocol">
+        <div class="infocard">
+          <div class="ictitle">Kadaster · BRK</div>
+          <div class="irow"><span class="il">Perceel</span><span class="iv">${d.kadaster.gemeente} ${d.kadaster.sectie} ${d.kadaster.perceel}</span></div>
+          <div class="irow"><span class="il">Eigendom</span><span class="iv">${d.ownership}</span></div>
+          <div class="irow"><span class="il">Zakelijke rechten</span><span class="iv ${d.kadaster.rechten.startsWith('Geen')?'ok':''}">${d.kadaster.rechten}</span></div>
+          <div class="irow"><span class="il">Erfpacht</span><span class="iv">${d.kadaster.erfpacht}</span></div>
+          <div class="irow"><span class="il">Hypotheek / beslag</span><span class="iv ${d.kadaster.hypotheek.startsWith('Geen')?'ok':''}">${d.kadaster.hypotheek}</span></div>
+        </div>
+        <div class="infocard">
+          <div class="ictitle">Omgevingsplan</div>
+          <div class="irow"><span class="il">Bestemming</span><span class="iv">${d.planning.bestemming}</span></div>
+          <div class="irow"><span class="il">Planstatus</span><span class="iv">${d.planning.planstatus}</span></div>
+          <div class="irow"><span class="il">Milieucategorie</span><span class="iv">${d.planning.milieucat}</span></div>
+          <div class="irow"><span class="il">Max. bouwhoogte</span><span class="iv">${d.planning.bouwhoogte} m</span></div>
+          <div class="irow"><span class="il">Bebouwingspercentage</span><span class="iv">${d.planning.bebouwing}%</span></div>
+        </div>
+      </div>
+      <div class="twocol" style="margin-top:14px">
+        <div class="infocard">
+          <div class="ictitle">Locatie</div>
+          <div class="irow"><span class="il">Afstand ${d.location.snelweg}</span><span class="iv">${d.location.afstandSnelweg} km</span></div>
+          <div class="irow"><span class="il">Afstand stedelijk centrum</span><span class="iv">${d.location.afstandCentrum} km</span></div>
+          <div class="irow"><span class="il">OV-bereikbaarheid</span><span class="iv">${d.location.ov}</span></div>
+          <div class="irow"><span class="il">Overstromingsrisico</span><span class="iv ${d.location.overstroming==='Laag'?'ok':''}">${d.location.overstroming}</span></div>
+        </div>
+        <div class="infocard">
+          <div class="ictitle">Bronnen</div>
+          <div class="irow"><span class="il">Signalen</span><span class="iv" style="font-weight:500;color:var(--mut)">KvK · BRK · DSO</span></div>
+          <div class="irow"><span class="il">Kavel</span><span class="iv" style="font-weight:500;color:var(--mut)">BAG · Kadaster</span></div>
+          <div class="irow"><span class="il">Netcapaciteit</span><span class="iv" style="font-weight:500;color:var(--mut)">Netbeheerder</span></div>
+          <div class="irow"><span class="il">Milieu</span><span class="iv" style="font-weight:500;color:var(--mut)">AERIUS · Bodemloket</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="verdict ${v.c}"><span class="vi">${v.i}</span><div class="vt"><b>${v.t}</b><span>${v.s}</span></div></div>
+    </div>
+
+    <div class="ctawrap" id="sec-massa">
+      ${qd?`<button class="cta done" disabled><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Doorgezet naar Fase 2 · Massastudie</button><div class="ctasub">Overgedragen · de radar stopt hier (einde Fase 1)</div>`
+        :`<button class="cta" id="qualBtn">Kwalificeer voor massastudie <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button><div class="ctasub">Deze kavel wordt doorgezet naar Fase 2 · Massastudie</div>`}
+    </div>
+  </div>`;
+}
+function chkCard(name,c){return `<div class="check ${chkClass(c.status)}"><span class="cico">${chkGlyph(c.status)}</span><div class="cbody"><div class="cn">${name}</div><div class="cs">${c.label}</div><div class="cd">${c.desc}</div></div></div>`;}
+
+/* aerial parcel */
+function aerial(d){
+  const W=436,H=210,r=rng32(d.id*211+41);
+  let g=`<defs><filter id="grain${d.id}"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.06 0"/></filter></defs>`;
+  g+=`<rect width="${W}" height="${H}" fill="#6f7d5f"/>`;
+  // vegetation & paving patches
+  const patch=(x,y,w,h,f,o=1)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${f}" opacity="${o}"/>`;
+  g+=patch(0,0,W,H*0.4,"#7a8968");
+  g+=patch(0,H*0.55,W,H*0.45,"#68765a");
+  g+=`<polygon points="0,${H*0.5} ${W},${H*0.42} ${W},${H*0.6} 0,${H*0.66}" fill="#8c9a76" opacity=".6"/>`;
+  // neighbour roofs
+  for(let i=0;i<4;i++){const x=r()*W*0.8,y=r()*H*0.7;g+=patch(x,y,26+r()*40,18+r()*26,"#9aa0a4",.5);}
+  // road bottom
+  g+=`<rect x="0" y="${H-22}" width="${W}" height="22" fill="#5b6157"/><line x1="0" y1="${H-11}" x2="${W}" y2="${H-11}" stroke="#c9cdb8" stroke-width="1.4" stroke-dasharray="10 8" opacity=".8"/>`;
+  // parcel polygon
+  const cx=W*0.44,cy=H*0.44,rw=W*0.24,rh=H*0.3,n=6,pts=[];
+  for(let i=0;i<n;i++){const a=i/n*2*Math.PI-Math.PI/2,j=0.8+r()*0.4;pts.push([cx+Math.cos(a)*rw*j,cy+Math.sin(a)*rh*j]);}
+  const pp=pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ")+"Z";
+  g+=`<path d="${pp}" fill="#3f8b57" fill-opacity=".16" stroke="#eafff1" stroke-width="2.4" stroke-linejoin="round"/>`;
+  g+=`<path d="${pp}" fill="none" stroke="#123a25" stroke-width="1" stroke-dasharray="4 3" opacity=".5"/>`;
+  // existing building footprint
+  const bx=cx-24,by=cy-14;
+  g+=`<rect x="${bx}" y="${by}" width="58" height="34" rx="1" fill="#c9ccc4" stroke="#8a8f86" stroke-width="1" transform="rotate(-6 ${cx} ${cy})"/>`;
+  g+=`<text x="${cx}" y="${cy+2}" text-anchor="middle" font-family="IBM Plex Mono" font-size="7" fill="#3a4038" transform="rotate(-6 ${cx} ${cy})">BESTAAND GEBOUW</text>`;
+  // grain
+  g+=`<rect width="${W}" height="${H}" filter="url(#grain${d.id})"/>`;
+  // north arrow
+  g+=`<g transform="translate(${W-24},22)"><circle r="12" fill="rgba(0,0,0,.28)"/><path d="M0 -7 L4 5 L0 2 L-4 5 Z" fill="#fff"/><text x="0" y="-9" text-anchor="middle" font-family="IBM Plex Mono" font-size="7" fill="#fff">N</text></g>`;
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Schematische kavelweergave">${g}</svg>`;
+}
+
+function renderDrawer(){
+  const dr=document.getElementById("drawer");
+  if(selId==null){dr.innerHTML=`<div class="drawer-empty">Selecteer een kans op de kaart of in de lijst om het intelligence-detail te openen.</div>`;return;}
+  const d=DATA.find(x=>x.id===selId);
+  dr.innerHTML=drawerHTML(d);
+  dr.scrollTop=0;
+  document.getElementById("drClose").onclick=()=>{selId=null;curPhase=1;setPhase();renderDrawer();renderCards();renderPins();};
+  document.getElementById("drFav").onclick=()=>toggleFav(d.id);
+  document.getElementById("sbToggle").onclick=e=>{document.getElementById("sigbreak").classList.toggle("open");};
+  const qb=document.getElementById("qualBtn"); if(qb)qb.onclick=()=>qualify(d.id);
+  // concept fit interactivity
+  const fw=document.getElementById("fitwhy");
+  function showFit(c){fw.innerHTML=`<div class="fwl">Waarom ${CN[c]} · fit ${d.fits[c]}</div><div class="chips">${CFITWHY[c].map(x=>`<span class="chip">${x}</span>`).join("")}</div>`;}
+  showFit(d.concept);
+  document.getElementById("fitgrid").querySelectorAll(".fitrow").forEach(row=>row.onclick=()=>{
+    document.getElementById("fitgrid").querySelectorAll(".fitrow").forEach(r=>r.classList.remove("active"));
+    row.classList.add("active");showFit(row.dataset.c);});
+}
+
+/* ===== SELECT / ACTIONS ===== */
+function select(id,src){selId=id;renderCards();renderPins();renderDrawer();
+  const d=DATA.find(x=>x.id===id);
+  if(src==='map'){const el=document.querySelector(`.card[data-id="${id}"]`);if(el)el.scrollIntoView({block:"nearest",behavior:"smooth"});}
+  if(src==='card'&&d)panTo(d);
+}
+function toggleFav(id){favourites.has(id)?favourites.delete(id):favourites.add(id);renderCards();renderPill();if(selId===id)renderDrawer();}
+function qualify(id){qualified.add(id);renderDrawer();renderCards();renderPins();renderPill();
+  const d=DATA.find(x=>x.id===id);
+  toast(`✓`,`Doorgezet naar Fase 2 · Massastudie`,`${d.name} — de kavel is overgedragen aan de massastudie.`);
+}
+function toast(ic,title,sub){const w=document.getElementById("toastwrap");
+  const t=document.createElement("div");t.className="toast";t.innerHTML=`<span class="tic">${ic}</span><div><b>${title}</b><div class="tsub">${sub}</div></div>`;
+  w.appendChild(t);requestAnimationFrame(()=>t.classList.add("show"));
+  setTimeout(()=>{t.classList.remove("show");setTimeout(()=>t.remove(),320);},3600);
+}
+
+/* ===== PHASE STEPPER ===== */
+function setPhase(){document.querySelectorAll("#steps .step").forEach(s=>s.classList.toggle("on",+s.dataset.ph===curPhase));}
+document.querySelectorAll("#steps .step").forEach(s=>s.onclick=()=>{
+  const ph=+s.dataset.ph;
+  if(ph===1){selId=null;curPhase=1;setPhase();renderDrawer();renderCards();renderPins();return;}
+  if(selId==null){select(visible()[0].id,'card');}
+  curPhase=ph;setPhase();
+  const map={2:"sec-locatie",3:"sec-kavel",4:"sec-massa"};
+  const el=document.getElementById(map[ph]);if(el)el.scrollIntoView({behavior:"smooth",block:ph===4?"end":"start"});
+});
+
+/* ===== CONTROLS ===== */
+document.getElementById("tabs").querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
+  fCon=t.dataset.con;document.getElementById("tabs").querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===t));
+  renderCards();renderPins();});
+document.getElementById("sortSel").onchange=e=>{sortBy=e.target.value;renderCards();};
+document.getElementById("priceSel").onchange=e=>{fPrice=e.target.value;renderCards();renderPins();};
+document.getElementById("searchBtn").onclick=()=>{const q=prompt("Zoek op plaats, regio, snelweg of concept:","");if(q!=null){fText=q;renderCards();renderPins();}};
+document.querySelectorAll(".mapbtn").forEach(b=>b.onclick=()=>{
+  if(b.dataset.map==="heatmap"){heat=!heat;b.classList.toggle("on",heat);renderPins();}
+  else if(b.dataset.map==="lagen"){kadOn=!kadOn;b.classList.toggle("on",kadOn);if(LMAP){kadOn?kadasterLayer.addTo(LMAP):LMAP.removeLayer(kadasterLayer);}}
+  else{toast("✎","Gebied tekenen","Teken een zoekgebied op de kaart — beschikbaar in de MVP.");}
+});
+document.getElementById("loadMore").onclick=()=>toast("↓","Meer kansen","In de demo tonen we een selectie; de volledige 347 komen uit de live scan.");
+document.getElementById("filterBtn").onclick=()=>toast("⚙","Meer filters","Extra filters (regio, oppervlak, €/m², signaal, verdict) komen in de MVP.");
+document.getElementById("zin").onclick=()=>{if(LMAP)LMAP.zoomIn();};
+document.getElementById("zout").onclick=()=>{if(LMAP)LMAP.zoomOut();};
+
+/* ===== INIT ===== */
+renderCards();renderPill();renderDrawer();select(1,'init');
+try{buildMap();}catch(e){console.warn('Kaart kon niet initialiseren (Leaflet/PDOK niet bereikbaar in deze omgeving):',e);}
+addEventListener("resize",()=>{if(LMAP)LMAP.invalidateSize();});
+</script>
+</body>
+</html>
