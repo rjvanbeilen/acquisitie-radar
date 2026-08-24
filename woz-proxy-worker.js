@@ -10,7 +10,10 @@
 //
 // (Alternatief lokaal deployen: `npm i -g wrangler`, `wrangler deploy`.)
 
-const UPSTREAM = "https://www.wozwaardeloket.nl/wozwaardeloket-api/v1/wozwaarde/nummeraanduiding/";
+// LET OP: de oorspronkelijke host (www.wozwaardeloket.nl/wozwaardeloket-api/...) is uitgefaseerd
+// en geeft nu de Angular-appshell (HTML) terug i.p.v. JSON. De live API draait op api.kadaster.nl
+// (zelfde pad, ontdekt via het netwerkverkeer van de officiele WOZ-waardeloket-site).
+const UPSTREAM = "https://api.kadaster.nl/lvwoz/wozwaardeloket-api/v1/wozwaarde/nummeraanduiding/";
 
 // Zet dit op je eigen site-origin voor productie; "*" is prima voor een demo/MVP.
 const ALLOW_ORIGIN = "*";

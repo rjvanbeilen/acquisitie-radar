@@ -565,15 +565,15 @@ const DATA=SEED.map((s,i)=>{
 const CURRENT_YEAR=2026;
 const GOLDEN_FACTS=[
   {key:'ecofactorij',name:'Ecofactorij 1',city:'Apeldoorn',province:'Gelderland',postcode:'7325WC',
-   lon:6.03568002,lat:52.20099543,adresseerbaarobject_id:'0200010000056543',
+   lon:6.03568002,lat:52.20099543,adresseerbaarobject_id:'0200010000056543',nummeraanduiding_id:'0200200000076048',
    bouwjaar:2007,oppervlakte:3336,aantalVO:3,gebruiksdoel:'industriefunctie,kantoorfunctie',
    terrein:'Bedrijventerrein Ecofactorij (duurzaam bedrijventerrein langs de A1)'},
   {key:'zonnecel',name:'De Zonnecel 30',city:'Amersfoort',province:'Utrecht',postcode:'3815KN',
-   lon:5.42824694,lat:52.16747721,adresseerbaarobject_id:'0307010000523451',
+   lon:5.42824694,lat:52.16747721,adresseerbaarobject_id:'0307010000523451',nummeraanduiding_id:'0307200000523452',
    bouwjaar:2008,oppervlakte:12208,aantalVO:1,gebruiksdoel:'industriefunctie',
    terrein:'Bedrijvenpark De Wieken-Vinkenhoef (bij knooppunt Hoevelaken)'},
   {key:'wiekenweg',name:'Wiekenweg 44A',city:'Amersfoort',province:'Utrecht',postcode:'3815KL',
-   lon:5.43089655,lat:52.16570383,adresseerbaarobject_id:'0307010000562536',
+   lon:5.43089655,lat:52.16570383,adresseerbaarobject_id:'0307010000562536',nummeraanduiding_id:'0307200000561404',
    bouwjaar:2020,oppervlakte:94,aantalVO:1,gebruiksdoel:'industriefunctie',
    terrein:'Bedrijvenpark De Wieken-Vinkenhoef (bij knooppunt Hoevelaken)'}
 ];
@@ -595,16 +595,17 @@ function goldenWhyNow(g,sc){
     g.aantalVO===1?'Eén verblijfsobject in dit pand — vermoedelijk één eigenaar/huurder':`${g.aantalVO} verblijfsobjecten in dit pand — gedeeld gebruik`
   ];
 }
-const goldenCache={}; // key -> {bag:{status,...}, bodem:{status,...}}
+const goldenCache={}; // key -> {bag:{status,...}, bodem:{status,...}, woz:{status,...}}
 let goldenPandLayer=null, goldenMarkerLayer=null;
 async function loadGolden(key,force){
   const g=GOLDEN_FACTS.find(x=>x.key===key); if(!g)return;
   if(goldenCache[key]&&!force)return;
-  goldenCache[key]={bag:{status:'loading'},bodem:{status:'loading'}};
+  goldenCache[key]={bag:{status:'loading'},bodem:{status:'loading'},woz:{status:'loading'}};
   if(selId==='golden:'+key)renderDrawer();
-  const [bagR,bodemR]=await Promise.allSettled([fetchBagFacts(g.adresseerbaarobject_id),fetchBodemFacts(g.lon,g.lat)]);
+  const [bagR,bodemR,wozR]=await Promise.allSettled([fetchBagFacts(g.adresseerbaarobject_id),fetchBodemFacts(g.lon,g.lat),fetchWozFacts(g.nummeraanduiding_id)]);
   goldenCache[key].bag = bagR.status==='fulfilled' ? {status:'ok',...bagR.value} : {status:'error',message:bagR.reason&&bagR.reason.message||'Onbekende fout'};
   goldenCache[key].bodem = bodemR.status==='fulfilled' ? {status:'ok',...bodemR.value} : {status:'error',message:bodemR.reason&&bodemR.reason.message||'Onbekende fout'};
+  goldenCache[key].woz = wozR.status==='fulfilled' ? {status:'ok',...wozR.value} : {status:'error',message:wozR.reason&&wozR.reason.message||'Onbekende fout'};
   if(selId==='golden:'+key){renderDrawer();drawGoldenPand(key);}
 }
 function drawGoldenPand(key){
@@ -718,7 +719,7 @@ const BAG_BASE='https://api.pdok.nl/kadaster/bag/ogc/v2';
 // PDOK's eigen Bodemloket-proxy (service.pdok.nl/rivm/bodemloket) is uitgefaseerd; dit is het actieve endpoint achter bodemloket.nl
 const BODEM_WMS='https://gis.gdngeoservices.nl/standalone/services/blk_gdn/lks_blk_rd_v1/MapServer/WMSServer';
 const BODEM_LAYER='WBB_locaties'; // Wet Bodembescherming-locaties: bekende (potentieel) verontreinigde/onderzochte locaties
-const WOZ_PROXY=''; // wordt ingevuld in stap D (Cloudflare Worker-proxy)
+const WOZ_PROXY='https://woz-proxy.robertvanbeilen.workers.dev';
 let liveScan=null, liveMarker=null, liveSeq=0, livePandLayer=null;
 
 async function fetchLocatie(token,lat,lon){
@@ -781,6 +782,16 @@ async function fetchBodemFacts(lon,lat){
   const first=feats[0]?Array.from(feats[0].getElementsByTagName('Field')).map(f=>({name:f.getElementsByTagName('FieldName')[0]?.textContent,value:f.getElementsByTagName('FieldValue')[0]?.textContent})).filter(f=>f.name&&f.name!=='Shape'):[];
   return {count:feats.length,fields:first};
 }
+async function fetchWozFacts(nummeraanduidingId){
+  if(!nummeraanduidingId)throw new Error('Geen nummeraanduiding-id beschikbaar voor WOZ-opvraging');
+  const res=await fetch(`${WOZ_PROXY}/${nummeraanduidingId}`);
+  if(res.status===404)return {available:false};
+  if(!res.ok)throw new Error(`WOZ-proxy: HTTP ${res.status}`);
+  const json=await res.json();
+  const waarden=(json.wozWaarden||[]).slice().sort((a,b)=>b.peildatum.localeCompare(a.peildatum));
+  if(!waarden.length)return {available:false};
+  return {available:true,latest:waarden[0],history:waarden};
+}
 async function fetchBag(token,doc){
   try{
     const {vo,pand}=await fetchBagFacts(doc.adresseerbaarobject_id);
@@ -813,11 +824,25 @@ async function fetchBodem(token,doc){
     renderDrawer();
   }
 }
+async function fetchWoz(token,doc){
+  try{
+    const facts=await fetchWozFacts(doc.nummeraanduiding_id);
+    if(token!==liveSeq)return;
+    liveScan.woz={status:'ok',...facts};
+    renderDrawer();
+  }catch(err){
+    console.error('[live quickscan] WOZ-fetch mislukt:',err);
+    if(token!==liveSeq)return;
+    liveScan.woz={status:'error',message:err.message||'Onbekende fout'};
+    renderDrawer();
+  }
+}
 async function fetchBagAndBodem(token,doc){
   liveScan.bag={status:'loading'};
   liveScan.bodem={status:'loading'};
+  liveScan.woz={status:'loading'};
   renderDrawer();
-  await Promise.allSettled([fetchBag(token,doc),fetchBodem(token,doc)]);
+  await Promise.allSettled([fetchBag(token,doc),fetchBodem(token,doc),fetchWoz(token,doc)]);
 }
 
 function onMapClick(e){
@@ -1081,6 +1106,22 @@ function bagSectionHTML(bag){
   </div>
   <div class="livehint" style="margin:10px 0 0">Bron: BAG (Kadaster) — live${p&&p.geometry?'. Pandcontour getekend op de kaart.':''}</div>`;
 }
+function fmtPeildatum(iso){
+  const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(iso||''); if(!m)return iso;
+  return `${m[3]}-${m[2]}-${m[1]}`;
+}
+function wozSectionHTML(woz){
+  if(!woz||woz.status==='idle')return `<div class="notavail">Wordt geladen zodra het adres bekend is…</div>`;
+  if(woz.status==='loading')return skeletonRows();
+  if(woz.status==='error')return `<div class="errbox"><span>⚠</span><div>WOZ: niet beschikbaar (${woz.message})</div></div>`;
+  if(!woz.available)return `<div class="notavail">WOZ: niet beschikbaar — alleen WOZ-waarden van woningen zijn openbaar bij het WOZ-waardeloket; dit object is niet (volledig) in gebruik als woning.</div>`;
+  const l=woz.latest, h=woz.history;
+  return `<div class="infocard">
+    <div class="irow"><span class="il">WOZ-waarde</span><span class="iv">${fmtEur0(l.vastgesteldeWaarde)}</span></div>
+    <div class="irow"><span class="il">Peildatum</span><span class="iv">${fmtPeildatum(l.peildatum)}</span></div>
+  </div>
+  <div class="livehint" style="margin:10px 0 0">Bron: WOZ-waardeloket (Kadaster) — live${h.length>1?`. Historie: ${h.length} peildata (${fmtPeildatum(h[h.length-1].peildatum)} – ${fmtPeildatum(h[0].peildatum)}).`:'.'}</div>`;
+}
 function bodemSectionHTML(bodem){
   if(bodem.status==='idle')return `<div class="notavail">Wordt geladen zodra het adres bekend is…</div>`;
   if(bodem.status==='loading')return skeletonRows();
@@ -1128,6 +1169,10 @@ function liveDrawerHTML(ls){
       <div class="seclab"><span class="n">C</span> Bodem-quickscan</div>
       ${bodemSectionHTML(ls.bodem)}
     </div>
+    <div class="sec">
+      <div class="seclab"><span class="n">D</span> WOZ-waarde / Prijsindicatie</div>
+      ${wozSectionHTML(ls.woz)}
+    </div>
   </div>`;
 }
 function closeLive(){
@@ -1139,7 +1184,7 @@ function closeLive(){
 
 function goldenDrawerHTML(g){
   const sc=goldenScore(g), why=goldenWhyNow(g,sc);
-  const cache=goldenCache[g.key]||{bag:{status:'loading'},bodem:{status:'loading'}};
+  const cache=goldenCache[g.key]||{bag:{status:'loading'},bodem:{status:'loading'},woz:{status:'loading'}};
   return `<div class="dh">
     <div class="dtop">
       <div class="gauge" style="width:58px;height:58px;flex:none">${gauge(sc.score,58)}</div>
@@ -1155,7 +1200,7 @@ function goldenDrawerHTML(g){
     </div>
   </div>
   <div class="dbody">
-    <div class="livehint">Dit is één van drie <b>echte, verifieerbare</b> panden op ${g.terrein} — geen voorbeelddata. Adres en BAG-/bodemfeiten zijn live opgehaald; controleer ze zelf via het Kadaster of Bodemloket.</div>
+    <div class="livehint">Dit is één van drie <b>echte, verifieerbare</b> panden op ${g.terrein} — geen voorbeelddata. Adres, BAG-, bodem- en WOZ-feiten zijn live opgehaald; controleer ze zelf via het Kadaster, Bodemloket of WOZ-waardeloket.</div>
     <div class="sec">
       <div class="seclab">Gebouw (BAG) <span class="livebadge" style="margin-left:8px"><i></i>Bron: BAG — live</span></div>
       ${bagSectionHTML(cache.bag)}
@@ -1165,8 +1210,8 @@ function goldenDrawerHTML(g){
       ${bodemSectionHTML(cache.bodem)}
     </div>
     <div class="sec">
-      <div class="seclab">Prijsindicatie</div>
-      <div class="livehint">WOZ-waarde volgt zodra de proxy (stap D) gekoppeld is — dan tonen we hier de echte, actuele WOZ-waarde met peildatum, in plaats van een schatting.</div>
+      <div class="seclab">WOZ-waarde / Prijsindicatie <span class="livebadge" style="margin-left:8px"><i></i>Bron: WOZ-waardeloket — live</span></div>
+      ${wozSectionHTML(cache.woz)}
     </div>
     <div class="sec">
       <div class="seclab">Score &amp; waarom nu <span class="pill-indic">indicatief · modelinschatting</span></div>
