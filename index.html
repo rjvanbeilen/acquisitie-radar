@@ -348,7 +348,7 @@ button{font-family:inherit}
 .card.devsite{border-color:color-mix(in srgb,var(--layers) 35%,var(--line));background:color-mix(in srgb,var(--layers) 4%,var(--panel))}
 .dev-pin{--mc:var(--layers);box-shadow:0 0 0 3px #fff,0 0 0 5px var(--layers),0 1px 5px rgba(20,30,20,.4)}
 .dev-pin span{font-size:15px}
-.gold-pin .gstar{position:absolute;top:-5px;right:-5px;width:15px;height:15px;border-radius:50%;background:var(--go);color:#fff;font-size:9px;font-weight:700;display:grid;place-items:center;border:1.5px solid #fff}
+.gold-pin .gstar,.dev-pin .gstar{position:absolute;top:-5px;right:-5px;width:15px;height:15px;border-radius:50%;background:var(--go);color:#fff;font-size:9px;font-weight:700;display:grid;place-items:center;border:1.5px solid #fff}
 
 @media (max-width:1360px){ .main{grid-template-columns:340px 1fr 400px} }
 @media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}}
@@ -664,14 +664,60 @@ const GOLDEN_OPPS=GOLDEN_FACTS.map(g=>{
     }
   };
 });
+/* ===== GROND-SCORINGSMECHANISME (Taak 4) — analoog aan goldenScore() voor panden, maar op
+   grond-/locatiepotentieel i.p.v. gebouwleeftijd. Elk ingrediënt is herleidbaar tot een live
+   kadasterfeit of een expliciet gelabelde ○ indicatieve modelaanname; nooit een verzonnen cijfer.
+   Herverkaveling-/mutatiesignaal hergebruikt statusHistorie/beginGeldigheid uit dezelfde
+   fetchPerceelFacts()-call die al voor de contour/aanduiding wordt gedaan — geen nieuwe bron. */
+const NL_MAANDEN={januari:0,februari:1,maart:2,april:3,mei:4,juni:5,juli:6,augustus:7,september:8,oktober:9,november:10,december:11};
+function parseDutchDate(s){
+  const m=/^(\d{1,2})\s+(\w+)\s+(\d{4})$/.exec((s||'').trim()); if(!m)return null;
+  const mo=NL_MAANDEN[m[2].toLowerCase()]; if(mo==null)return null;
+  return new Date(Date.UTC(+m[3],mo,+m[1]));
+}
+function grondSizeScore(m2){
+  if(!m2)return 0;
+  return Math.max(0,Math.min(100,Math.round((Math.log10(m2)-3)*50))); // 1.000 m²→0, 10.000 m²→50, 100.000 m²→100
+}
+function mutatieSignaalScore({statusHistorie,beginGeldigheid,parcelDateStr}={}){
+  if(statusHistorie&&!/^geldig$/i.test(statusHistorie)){
+    return {score:95,label:`Grensstatus "${statusHistorie}" — actieve kadastrale mutatie`};
+  }
+  const dt=beginGeldigheid?new Date(beginGeldigheid):parseDutchDate(parcelDateStr);
+  if(!dt||isNaN(dt.getTime()))return {score:30,label:'Registratiedatum van de perceelgrens onbekend'};
+  const yrs=(Date.now()-dt.getTime())/(365.25*24*3600*1000);
+  const datum=dt.toLocaleDateString('nl-NL',{day:'numeric',month:'long',year:'numeric'});
+  if(yrs<1)return {score:100,label:`Perceelgrens geregistreerd ${datum} — minder dan 1 jaar geleden`};
+  if(yrs<2)return {score:85,label:`Perceelgrens geregistreerd ${datum} — ${yrs.toFixed(1)} jaar geleden`};
+  if(yrs<3)return {score:65,label:`Perceelgrens geregistreerd ${datum} — ${yrs.toFixed(1)} jaar geleden`};
+  if(yrs<5)return {score:40,label:`Perceelgrens geregistreerd ${datum} — ${yrs.toFixed(1)} jaar geleden`};
+  return {score:15,label:`Perceelgrens al langer dan 5 jaar ongewijzigd (${datum})`};
+}
+const GROND_LIGGING_NEUTRAAL=50, GROND_BESTEMMING_NEUTRAAL=50;
+function grondScore({grootte,mutatie,ligging=GROND_LIGGING_NEUTRAAL,bestemming=GROND_BESTEMMING_NEUTRAAL}){
+  const sizeScore=grondSizeScore(grootte), onbebouwdScore=100;
+  const score=Math.max(0,Math.min(100,Math.round(sizeScore*0.35+mutatie.score*0.20+onbebouwdScore*0.10+ligging*0.20+bestemming*0.15)));
+  return {score,sizeScore,onbebouwdScore,mutatieScore:mutatie.score,mutatieLabel:mutatie.label,ligging,bestemming};
+}
+function grondBreakdownHTML(gd){
+  const rows=[
+    ['Perceeloppervlakte (Kadastrale Kaart)',gd.sizeScore,true],
+    ['Herverkaveling-/mutatiesignaal',gd.mutatieScore,true],
+    ['Onbebouwd (geen BAG-pand)',gd.onbebouwdScore,true],
+    ['Ligging/ontsluiting',gd.ligging,false],
+    ['Ruimte binnen bestemming (beb%/hoogte)',gd.bestemming,false]
+  ];
+  return `<div class="sigbreak open">${rows.map(([l,val,live])=>`<div class="sigrow"><span class="sn"><b style="color:${live?'var(--go)':'var(--watch)'}">${live?'●':'○'}</b> ${l}</span><div class="bar"><i style="width:${val}%;background:var(--green-bar)"></i></div><span class="sval">${val}</span></div>`).join('')}</div>
+  <div class="livehint" style="margin-top:10px">Score = 35% oppervlakte + 20% mutatiesignaal + 10% onbebouwd (samen ● Live) + 20% ligging + 15% bestemmingsruimte (○ Indicatief, modelaanname zolang DSO niet gekoppeld is) = <b>${gd.score}</b>. ${gd.mutatieLabel}. Volledig herleidbaar — geen synthetische generator.</div>`;
+}
 /* ===== ONTWIKKELKAVELS — tweede kanstype naast de golden herontwikkelpanden: vrijgemaakt/
    onderbenut terrein zonder (relevant) BAG-pand. Geen goldenScore (die vereist bouwjaar +
-   oppervlakte van een bestaand pand — die zijn er hier niet, en verzinnen is uitgesloten).
+   oppervlakte van een bestaand pand); score komt in plaats daarvan uit grondScore() hierboven.
    Herkenbaar aan: geen/recent BAG-pand op de kavel, kadastraal in herverkaveling
    (grensvaststelling opgeschort), gesloopte panden in de omgeving.
-   MVP-hook: dit hardcodeert één samengevoegde kavel (5 percelen, zelfde herverkavelingsdatum,
-   live geverifieerd via de Kadastrale Kaart). Het is de opmaat naar een interactieve
-   radar-feature "selecteer meerdere percelen → voeg samen tot ontwikkelkavel" — niet nu gebouwd. */
+   MVP-hook: Hoofddorp II XL hardcodeert één samengevoegde kavel (5 percelen, zelfde
+   herverkavelingsdatum, live geverifieerd via de Kadastrale Kaart). Het is de opmaat naar een
+   interactieve radar-feature "selecteer meerdere percelen → voeg samen" — niet nu gebouwd. */
 const DEVSITE_FACTS=[
   {id:2001,key:'hoofddorp2xl',name:'Layers Hoofddorp II XL',city:'Hoofddorp',province:'Noord-Holland',postcode:'2132ND',
    lon:4.715717,lat:52.294240,
@@ -692,33 +738,49 @@ const DEVSITE_FACTS=[
      [[[4.716712863580005,52.29524888622036],[4.71652764860763,52.29511954170618],[4.716774735611575,52.294981998249554],[4.716962313382229,52.29511311741243],[4.716712863580005,52.29524888622036]]]
    ]},
    note:'Vrijgemaakte ontwikkelkavel in De Hoek (Kruisweg/Rijnlanderweg) — indicatief samengevoegd uit meerdere aangrenzende percelen in herverkaveling (grensvaststelling opgeschort, 4 november 2024) met gesloopte panden (\'70-\'90) in de omgeving. Eigendoms-assemblage te bevestigen met Kadaster BRK (◇ te licentiëren, Fase 3). Hier is Layers Hoofddorp II XL gerealiseerd (6 units, Fase 2).',
-   excelFile:'Layers-Development-Model-Hoofddorp-II-XL.xlsx'}
+   excelFile:'Layers-Development-Model-Hoofddorp-II-XL.xlsx',realized:true,echteData:true},
+  /* Golden ontwikkelkavel 2 (Taak 4b): AL 3274 (Hoofddorp, Haarlemmermeer). Eén perceel, geen
+     hardgecodeerde geometrie — die (en de grootte/grensstatus) wordt live opgehaald via dezelfde
+     fetchPerceelFacts() als de losse kaartklik, zodat dit een écht geverifieerde "golden"-kavel is
+     i.p.v. synthetische data. singleParcel:true triggert die live herfetch in loadDevsite().
+     Geverifieerd: 17.392 m², geen BAG-adres op dit perceel (dichtstbijzijnde adres, 90m verderop,
+     hoort bij naburig perceel AL 3275), grens geregistreerd 11 mei 2026 — een zeer vers, sterk
+     live mutatiesignaal. */
+  {id:2002,key:'al3274',name:'Kadastraal perceel AL 3274',city:'Hoofddorp',province:'Noord-Holland',postcode:'2132',
+   lon:4.67502391,lat:52.28487374,
+   parcels:[{sectie:'AL',perceel:'3274',grootte:17392}],
+   parcelStatus:null,parcelDate:null,geometry:null,singleParcel:true,
+   note:'Onbebouwde kavel bij Hoofddorp (Haarlemmermeer) — kadastraal perceel AL 3274, live geverifieerd via de Kadastrale Kaart. Recent geregistreerde perceelgrens (mei 2026) is een sterk mutatiesignaal. Eén perceel, dus geen eigendoms-assemblage van toepassing.',
+   excelFile:null,realized:false,echteData:true}
 ];
 const DEVSITE_OPPS=DEVSITE_FACTS.map(g=>{
   const kavelM2=g.parcels.reduce((s,p)=>s+p.grootte,0);
+  const mutatie=mutatieSignaalScore({statusHistorie:g.parcelStatus&&/opgeschort/i.test(g.parcelStatus)?g.parcelStatus:null,parcelDateStr:g.parcelDate});
+  const grond=grondScore({grootte:kavelM2,mutatie});
   return {id:g.id,key:g.key,isDevSite:true,isGolden:false,
     name:g.name,city:g.city,province:g.province,postcode:g.postcode,lon:g.lon,lat:g.lat,
     kavelM2,siteAreaHa:kavelM2/10000,
     parcels:g.parcels,parcelStatus:g.parcelStatus,parcelDate:g.parcelDate,geometry:g.geometry,
+    singleParcel:!!g.singleParcel,realized:!!g.realized,echteData:!!g.echteData,grond,
     note:g.note,excelFile:g.excelFile,
     _loaded:false,
     live:{bodem:{status:'idle'}}
   };
 });
 let devsiteMarkerLayer=null, devsitePolyLayer=null;
-function devsiteIcon(sel){
+function devsiteIcon(sel,echteData){
   const sz=sel?42:36;
-  const html=`<div class="lmk dev-pin${sel?' sel':''}"><span>◆</span></div>`;
+  const html=`<div class="lmk dev-pin${sel?' sel':''}"><span>◆</span>${echteData?'<i class="gstar">✓</i>':''}</div>`;
   return L.divIcon({html,className:'lmk-wrap',iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]});
 }
 function renderDevsitePins(){
   if(!LMAP)return;
   if(!devsiteMarkerLayer)devsiteMarkerLayer=L.layerGroup().addTo(LMAP);
   devsiteMarkerLayer.clearLayers();
-  DEVSITE_FACTS.forEach(g=>{
+  DEVSITE_OPPS.forEach(g=>{
     const sel=selId===g.id;
-    const m=L.marker([g.lat,g.lon],{icon:devsiteIcon(sel),zIndexOffset:sel?1200:600});
-    m.bindTooltip(`<b>${g.name}</b><span class="tm"><i>◆ Ontwikkelkavel</i><i>${g.city}</i></span>`,{direction:'top',offset:[0,-6],className:'lmk-tip'});
+    const m=L.marker([g.lat,g.lon],{icon:devsiteIcon(sel,g.echteData),zIndexOffset:sel?1200:600});
+    m.bindTooltip(`<b>${g.name}</b><span class="tm"><i>◆ Ontwikkelkavel${g.echteData?' · ✓ Echte data':''}</i><i>${g.city}</i></span>`,{direction:'top',offset:[0,-6],className:'lmk-tip'});
     m.on('click',()=>select(g.id,'map'));
     m.addTo(devsiteMarkerLayer);
   });
@@ -727,51 +789,68 @@ function drawDevsiteGeom(d){
   if(!LMAP||!d.geometry)return;
   if(devsitePolyLayer)LMAP.removeLayer(devsitePolyLayer);
   devsitePolyLayer=L.geoJSON(d.geometry,{style:{color:'#6d4ac2',weight:2.5,fillColor:'#6d4ac2',fillOpacity:.14,dashArray:'5 3'}}).addTo(LMAP);
+  // Bij een los, live opgehaald perceel (nog geen hardgecodeerde geometrie zoals Hoofddorp II XL)
+  // ook inzoomen op de exacte kavelcontour, net als bij een losse kaartklik (Taak 1).
+  if(d.singleParcel){try{LMAP.fitBounds(devsitePolyLayer.getBounds(),{maxZoom:19,padding:[70,70]});}catch(e){}}
 }
 async function loadDevsite(key,force){
   const d=DEVSITE_OPPS.find(x=>x.key===key);
   if(!d)return;
   if(d._loaded&&!force)return;
   d._loaded=true;
+  const jobs=[fetchBodemFacts(d.lon,d.lat)];
   d.live.bodem={status:'loading'};
+  if(d.singleParcel)jobs.push(fetchPerceelFacts(d.lon,d.lat));
   if(selId===d.id)renderDrawer();
-  try{
-    const {count,fields}=await fetchBodemFacts(d.lon,d.lat);
-    d.live.bodem={status:'ok',count,fields};
-  }catch(err){
-    d.live.bodem={status:'error',message:err.message||'Onbekende fout'};
+  const [bodemR,perceelR]=await Promise.allSettled(jobs);
+  if(bodemR.status==='fulfilled'){
+    d.live.bodem={status:'ok',count:bodemR.value.count,fields:bodemR.value.fields};
+  }else{
+    d.live.bodem={status:'error',message:bodemR.reason&&bodemR.reason.message||'Onbekende fout'};
+  }
+  if(d.singleParcel&&perceelR&&perceelR.status==='fulfilled'&&perceelR.value){
+    const p=perceelR.value;
+    d.geometry=p.geometry;
+    d.parcels=[{sectie:p.sectie,perceel:p.perceelnummer,grootte:p.grootte}];
+    d.parcelStatus=p.statusHistorie;
+    d.parcelDateISO=p.beginGeldigheid;
+    d.kavelM2=p.grootte; d.siteAreaHa=p.grootte/10000;
+    const mutatie=mutatieSignaalScore({statusHistorie:p.statusHistorie,beginGeldigheid:p.beginGeldigheid});
+    d.grond=grondScore({grootte:p.grootte,mutatie});
+    if(selId===d.id)drawDevsiteGeom(d);
   }
   if(selId===d.id){renderDrawer();renderCards();}
 }
 function devsiteCardHTML(g){
-  const sel=selId===g.id, totalM2=g.parcels.reduce((s,p)=>s+p.grootte,0);
+  const sel=selId===g.id, totalM2=g.kavelM2, gd=g.grond;
   return `<div class="card devsite ${sel?'sel':''}" data-id="${g.id}" data-devsite="${g.key}">
     <div class="top">
-      <div class="gauge" style="width:54px;height:54px;display:grid;place-items:center;background:color-mix(in srgb,var(--layers) 12%,var(--panel-2));border-radius:50%;border:1px solid color-mix(in srgb,var(--layers) 30%,var(--line))"><span style="color:var(--layers);font-size:20px;font-weight:700">◆</span></div>
+      <div class="gauge" style="width:54px;height:54px">${gauge(gd.score,54)}</div>
       <div class="cinfo">
         <div class="crow"><h3>${g.name}</h3><div class="loc">${g.city}, ${g.province}</div></div>
-        <div class="crow2"><span class="devbadge">◆ Ontwikkelkavel</span></div>
+        <div class="crow2"><span class="devbadge">◆ Ontwikkelkavel</span>${g.echteData?'<span class="goldbadge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>Echte data</span>':''}</div>
       </div>
     </div>
-    <div class="why"><div class="wl">Samengevoegde kavel · kadaster (live)</div><p>${g.parcels.length} percelen in herverkaveling — ${fmtN(totalM2)} m² totaal.</p></div>
+    <div class="why"><div class="wl">Waarom nu · uit echte kadasterfeiten</div><p>${fmtN(totalM2)} m² onbebouwd${g.parcels.length>1?` (${g.parcels.length} percelen)`:''}. ${gd.mutatieLabel}.</p></div>
     <div class="cmetrics">
-      <div class="cm"><span class="cml">Kavel (samengevoegd)</span><span class="cmv">${fmtN(totalM2)} m²</span></div>
+      <div class="cm"><span class="cml">Kavel (kadaster)</span><span class="cmv">${fmtN(totalM2)} m²</span></div>
       <div class="cm"><span class="cml">Percelen</span><span class="cmv">${g.parcels.length}</span></div>
     </div>
   </div>`;
 }
 function renderDevsiteCards(){
   const el=document.getElementById("devsiteCards"); if(!el)return;
-  el.innerHTML=DEVSITE_FACTS.map(devsiteCardHTML).join("");
+  el.innerHTML=DEVSITE_OPPS.map(devsiteCardHTML).join("");
   el.querySelectorAll("[data-id]").forEach(card=>card.addEventListener("click",()=>select(+card.dataset.id,'card')));
 }
 function devsiteDrawerHTML(d){
-  const qd=qualified.has(d.id), totalM2=d.parcels.reduce((s,p)=>s+p.grootte,0);
+  const qd=qualified.has(d.id), totalM2=d.parcels.reduce((s,p)=>s+p.grootte,0), meer=d.parcels.length>1;
+  const parcelDateLabel=d.parcelDateISO?new Date(d.parcelDateISO).toLocaleDateString('nl-NL',{day:'numeric',month:'long',year:'numeric'}):(d.parcelDate||'onbekend');
   return `<div class="dh">
     <div class="dtop">
-      <div class="gauge" style="width:58px;height:58px;flex:none;display:grid;place-items:center;background:color-mix(in srgb,var(--layers) 12%,var(--panel-2));border-radius:50%;border:1px solid color-mix(in srgb,var(--layers) 30%,var(--line))"><span style="color:var(--layers);font-size:24px;font-weight:700">◆</span></div>
+      <div class="gauge" style="width:58px;height:58px">${gauge(d.grond.score,58)}</div>
       <div class="dinfo">
-        <div class="dtags"><span class="devbadge">◆ Ontwikkelkavel · gerealiseerd (Fase 2)</span>${qd?'<span class="f2tag">→ Fase 2</span>':''}</div>
+        <div class="dtags"><span class="devbadge">◆ Ontwikkelkavel${d.realized?' · gerealiseerd (Fase 2)':''}</span>${d.echteData?'<span class="goldbadge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>Echte data</span>':''}${qd?'<span class="f2tag">→ Fase 2</span>':''}</div>
         <h2>${d.name}</h2>
         <div class="dloc"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.3 7-11a7 7 0 10-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>${d.city}, ${d.province} · ${d.postcode}</div>
       </div>
@@ -781,22 +860,27 @@ function devsiteDrawerHTML(d){
       </div>
     </div>
     <div class="dmetrics">
-      <div class="dm"><div class="dml">Kavel (samengevoegd)</div><div class="dmv">${fmtHa(d.siteAreaHa)}<small> ha</small></div></div>
+      <div class="dm"><div class="dml">Kavel${meer?' (samengevoegd)':''}</div><div class="dmv">${fmtHa(d.siteAreaHa)}<small> ha</small></div></div>
       <div class="dm hl"><div class="dml">Richtprijs</div><div class="dmv" style="font-size:15px">n.v.t.</div></div>
       <div class="dm"><div class="dml">Percelen</div><div class="dmv">${d.parcels.length}</div></div>
       <div class="dm"><div class="dml">Totaal (kadaster) <i class="srcdot live" title="Live — Kadastrale Kaart"></i></div><div class="dmv">${fmtN(totalM2)}<small> m²</small></div></div>
     </div>
   </div>
   <div class="dbody">
-    <div class="livehint" style="margin-bottom:14px">◆ Ontwikkelkavel — vrijgemaakt terrein zonder (relevant) BAG-pand. Geen acquisitiescore (die vereist een bestaand pand om leeftijd × oppervlakte op toe te passen); dit is een apart kanstype naast de gescoorde herontwikkelpanden.</div>
+    <div class="livehint" style="margin-bottom:14px">◆ Ontwikkelkavel — vrijgemaakt terrein zonder (relevant) BAG-pand. Gescoord op grond-/locatiepotentieel (zie score-opbouw hieronder), niet op gebouwleeftijd — dit is een apart kanstype naast de gescoorde herontwikkelpanden.</div>
     <div class="livehint" style="margin-bottom:14px">${d.note}</div>
     <div class="sec">
-      <div class="seclab">Samengevoegde kavel · Kadastrale Kaart ${srcBadge('live')}</div>
+      <div class="seclab"><span class="n">02</span> Grond-/locatiescore</div>
+      <div class="scorebox sig" style="margin-bottom:12px"><div class="sl">Grondscore</div><div class="sv">${d.grond.score}<small> / 100</small></div><div class="sbar"><i style="width:${d.grond.score}%;background:var(--green-bar)"></i></div></div>
+      ${grondBreakdownHTML(d.grond)}
+    </div>
+    <div class="sec">
+      <div class="seclab">${meer?'Samengevoegde kavel':'Kadastraal perceel'} · Kadastrale Kaart ${srcBadge('live')}</div>
       <div class="infocard">
         ${d.parcels.map(p=>`<div class="irow"><span class="il">Perceel ${p.sectie} ${p.perceel}</span><span class="iv">${fmtN(p.grootte)} m²</span></div>`).join("")}
-        <div class="irow"><span class="il"><b>Totaal (samengevoegd)</b></span><span class="iv"><b>${fmtN(totalM2)} m²</b></span></div>
+        ${meer?`<div class="irow"><span class="il"><b>Totaal (samengevoegd)</b></span><span class="iv"><b>${fmtN(totalM2)} m²</b></span></div>`:''}
       </div>
-      <div class="livehint" style="margin:10px 0 0">Bron: Kadastrale Kaart (Kadaster) — live GetFeatureInfo per perceel. Status: ${d.parcelStatus}, geregistreerd ${d.parcelDate}. MVP-hook: dit is een hard-gecodeerde percelenselectie voor de demo; de radar-feature "selecteer percelen → voeg samen tot ontwikkelkavel" volgt later (interactief, niet nu gebouwd).</div>
+      <div class="livehint" style="margin:10px 0 0">Bron: Kadastrale Kaart (Kadaster) — live GetFeatureInfo per perceel. Grensstatus: ${d.parcelStatus||'wordt geladen…'}, geregistreerd ${parcelDateLabel}.${meer?' MVP-hook: dit is een hard-gecodeerde percelenselectie voor de demo; de radar-feature "selecteer percelen → voeg samen tot ontwikkelkavel" volgt later (interactief, niet nu gebouwd).':''}</div>
     </div>
     <div class="sec">
       <div class="seclab">Bodem-quickscan ${srcBadge('live')}</div>
@@ -1087,6 +1171,9 @@ async function fetchPerceelFacts(lon,lat){
     sectie:p.sectie,perceelnummer:p.perceelnummer,grootte:Math.round(+p.kadastraleGrootteWaarde),
     gemeente:p.kadastraleGemeenteWaarde,gemeenteCode:p.AKRKadastraleGemeenteCodeWaarde,
     aanduiding:`${p.AKRKadastraleGemeenteCodeWaarde}-${p.sectie}-${p.perceelnummer}`,
+    // statusHistorie/beginGeldigheid: hetzelfde live GetFeatureInfo-antwoord bevat ook de
+    // grensstatus en -registratiedatum van het perceel — het live mutatiesignaal voor grondScore().
+    statusHistorie:p.statusHistorieWaarde,beginGeldigheid:p.beginGeldigheid,
     geometry:feat.geometry
   };
 }
@@ -1525,9 +1612,11 @@ function devkavelDrawerBody(ls){
   const perceel=ls.perceel, doc=ls.locatie.nearbyDoc;
   const provincienaam=doc&&doc.provincienaam;
   const perceelLabel=perceel&&perceel.status==='ok'?`${perceel.sectie} ${perceel.perceelnummer}`:'onbekend';
+  const grond=perceel&&perceel.status==='ok'?grondScore({grootte:perceel.grootte,mutatie:mutatieSignaalScore({statusHistorie:perceel.statusHistorie,beginGeldigheid:perceel.beginGeldigheid})}):null;
   return `<div class="dh">
     <div class="dtop">
-      <div class="gauge" style="width:58px;height:58px;flex:none;display:grid;place-items:center;background:color-mix(in srgb,var(--layers) 12%,var(--panel-2));border-radius:50%;border:1px solid color-mix(in srgb,var(--layers) 30%,var(--line))"><span style="color:var(--layers);font-size:24px;font-weight:700">◆</span></div>
+      ${grond?`<div class="gauge" style="width:58px;height:58px">${gauge(grond.score,58)}</div>`
+        :`<div class="gauge" style="width:58px;height:58px;flex:none;display:grid;place-items:center;background:color-mix(in srgb,var(--layers) 12%,var(--panel-2));border-radius:50%;border:1px solid color-mix(in srgb,var(--layers) 30%,var(--line))"><span style="color:var(--layers);font-size:24px;font-weight:700">◆</span></div>`}
       <div class="dinfo">
         <div class="dtags"><span class="devbadge">◆ Ontwikkelkavel</span><span class="livebadge"><i></i>Live quickscan</span></div>
         <h2>Kadastraal perceel ${perceelLabel}</h2>
@@ -1566,7 +1655,10 @@ function devkavelDrawerBody(ls){
       ${grondprijsSectionHTML(perceel,provincienaam)}
     </div>
     <div class="sec">
-      <div class="livehint">Score op grond-/locatiepotentieel (ontsluiting, zichtligging, ruimte binnen bestemming/beb%) vereist de bestemmingsplan/DSO-koppeling hierboven (◇ nog te koppelen) en is daarom nog niet te berekenen. Geen kunstmatige score op een leeg perceel.</div>
+      <div class="seclab"><span class="n">F</span> Grond-/locatiescore</div>
+      ${grond
+        ?`<div class="scorebox sig" style="margin-bottom:12px"><div class="sl">Grondscore</div><div class="sv">${grond.score}<small> / 100</small></div><div class="sbar"><i style="width:${grond.score}%;background:var(--green-bar)"></i></div></div>${grondBreakdownHTML(grond)}`
+        :`<div class="notavail">Grondscore n.v.t. — kadastraal perceel kon niet worden opgehaald.</div>`}
     </div>
   </div>`;
 }
