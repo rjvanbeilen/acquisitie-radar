@@ -39,19 +39,24 @@ button{font-family:inherit}
 .app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
 
 /* ===== TOP NAV ===== */
-.nav{height:56px;flex:none;background:var(--nav);display:flex;align-items:center;gap:0;padding:0 18px;border-bottom:1px solid #000}
+.nav{position:relative;height:56px;flex:none;background:var(--nav);display:flex;align-items:center;gap:0;padding:0 18px;border-bottom:1px solid #000}
 .nav .logo{font-family:"Fraunces",serif;font-weight:600;font-size:18px;letter-spacing:.01em;color:#fff}
 .nav .logo b{font-weight:600}
 .nav .vdiv{width:1px;height:22px;background:var(--nav-line);margin:0 16px}
 .nav .app-name{color:var(--nav-text);font-weight:600;font-size:14px;letter-spacing:.01em}
-.nav .steps{display:flex;align-items:center;gap:2px;margin:0 auto}
-.nav .step{position:relative;display:flex;align-items:center;gap:8px;padding:18px 16px;color:var(--nav-mut);font-size:13.5px;font-weight:500;cursor:pointer;background:none;border:0;transition:color .15s}
-.nav .step .sn{font-family:"IBM Plex Mono";font-size:11px;opacity:.8}
-.nav .step:hover{color:var(--nav-text)}
-.nav .step.on{color:#fff}
-.nav .step.on::after{content:"";position:absolute;left:12px;right:12px;bottom:0;height:2px;background:var(--green-bar);border-radius:2px}
-.nav .step.last{color:#c8cdd2}
-.nav .right{display:flex;align-items:center;gap:8px;margin-left:8px}
+/* Gedeelde 5-fase pill-nav (exacte CSS uit development_engine_v4_4.html) */
+.phases{position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:3px;height:56px}
+.ph{display:flex;align-items:center;gap:8px;padding:5px 9px 5px 6px;border-radius:10px;font-size:13.5px;color:#6f7883;white-space:nowrap}
+.ph.done{color:#99a1aa}
+.ph.active{background:#20262d;color:#f3f5f6}
+.ph .plabel{white-space:nowrap}
+.ph.active .plabel{font-weight:600}
+.pbadge{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:600;background:#171d24;color:#6f7883;border:1px solid #2a323b;flex:none}
+.ph.done .pbadge{background:#2f9d63;color:#fff;border-color:#2f9d63}
+.ph.active .pbadge{background:var(--layers);color:#fff;border-color:var(--layers)}
+.parw{color:#39414a;font-size:12px;margin:0 2px}
+@media(max-width:1120px){.phases{display:none}}
+.nav .right{display:flex;align-items:center;gap:8px;margin-left:auto}
 .nav .ic{width:36px;height:36px;border-radius:9px;border:1px solid var(--nav-line);background:transparent;color:var(--nav-mut);display:grid;place-items:center;cursor:pointer;position:relative}
 .nav .ic:hover{color:#fff;border-color:#3a424b}
 .nav .bdot{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;padding:0 4px;border-radius:9px;background:var(--green-bar);color:#08130c;font-size:10px;font-weight:700;display:grid;place-items:center;font-family:"IBM Plex Mono"}
@@ -355,12 +360,17 @@ button{font-family:inherit}
     <button class="brandbtn" id="navBrand" title="TODAY · Acquisitie-Radar"><span class="logo"><b>TODAY.</b></span></button>
     <span class="vdiv"></span>
     <span class="app-name">Acquisitie-Radar</span>
-    <div class="steps" id="steps">
-      <button class="step on" data-ph="1"><span class="sn">01</span>Ontdekken</button>
-      <button class="step" data-ph="2"><span class="sn">02</span>Locatie</button>
-      <button class="step" data-ph="3"><span class="sn">03</span>Kavel &amp; Kadaster</button>
-      <button class="step last" data-ph="4"><span class="sn">→ 04</span>Massastudie</button>
-    </div>
+    <nav class="phases" aria-label="Fasen operating model">
+      <div class="ph active" title="Fase 1 · Ontdekken"><span class="pbadge">1</span><span class="plabel">Ontdekken</span></div>
+      <span class="parw">→</span>
+      <div class="ph" title="Fase 2 · Onderbouwen"><span class="pbadge">2</span><span class="plabel">Onderbouwen</span></div>
+      <span class="parw">→</span>
+      <div class="ph" title="Fase 3 · Verwerven &amp; vergunnen"><span class="pbadge">3</span><span class="plabel">Verwerven</span></div>
+      <span class="parw">→</span>
+      <div class="ph" title="Fase 4 · Fabriceren &amp; bouwen"><span class="pbadge">4</span><span class="plabel">Bouwen</span></div>
+      <span class="parw">→</span>
+      <div class="ph" title="Fase 5 · Opleveren &amp; overdragen"><span class="pbadge">5</span><span class="plabel">Opleveren</span></div>
+    </nav>
     <div class="right">
       <button class="ic" id="searchBtn" title="Zoeken"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></button>
       <button class="ic" title="Meldingen"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0"/></svg><span class="bdot">3</span></button>
@@ -832,7 +842,7 @@ async function loadGolden(key,force){
 }
 
 /* ===== STATE ===== */
-let fCon="alle",sortBy="score",fText="",fPrice="alle",selId=null,curPhase=1;
+let fCon="alle",sortBy="score",fText="",fPrice="alle",selId=null;
 const PRICE_RANGES={alle:[0,Infinity],lt10:[0,10e6],"10-20":[10e6,20e6],"20-35":[20e6,35e6],gt35:[35e6,Infinity]};
 const favourites=new Set([2,5,9,13]); const qualified=new Set();
 const SIGLAB=[["herbestemmingsruimte","Herbestemmingsruimte"],["onderbenutting","Onderbenutting"],["eigendomsdynamiek","Eigendomsdynamiek"],["financieleDruk","Financiële druk"],["vraagdruk","Vraagdruk"]];
@@ -1467,7 +1477,7 @@ function renderDrawer(){
     dr.innerHTML=devsiteDrawerHTML(d);
     dr.scrollTop=0;
     document.getElementById("drClose").onclick=()=>{
-      selId=null;curPhase=1;setPhase();
+      selId=null;
       if(devsitePolyLayer&&LMAP){LMAP.removeLayer(devsitePolyLayer);devsitePolyLayer=null;}
       renderDrawer();renderCards();renderPins();
     };
@@ -1478,7 +1488,7 @@ function renderDrawer(){
   dr.innerHTML=drawerHTML(d);
   dr.scrollTop=0;
   document.getElementById("drClose").onclick=()=>{
-    selId=null;curPhase=1;setPhase();
+    selId=null;
     if(goldenPandLayer&&LMAP){LMAP.removeLayer(goldenPandLayer);goldenPandLayer=null;}
     renderDrawer();renderCards();renderPins();
   };
@@ -1531,17 +1541,6 @@ function toast(ic,title,sub){const w=document.getElementById("toastwrap");
   w.appendChild(t);requestAnimationFrame(()=>t.classList.add("show"));
   setTimeout(()=>{t.classList.remove("show");setTimeout(()=>t.remove(),320);},3600);
 }
-
-/* ===== PHASE STEPPER ===== */
-function setPhase(){document.querySelectorAll("#steps .step").forEach(s=>s.classList.toggle("on",+s.dataset.ph===curPhase));}
-document.querySelectorAll("#steps .step").forEach(s=>s.onclick=()=>{
-  const ph=+s.dataset.ph;
-  if(ph===1){selId=null;curPhase=1;setPhase();renderDrawer();renderCards();renderPins();return;}
-  if(selId==null){select(visible()[0].id,'card');}
-  curPhase=ph;setPhase();
-  const map={2:"sec-locatie",3:"sec-kavel",4:"sec-massa"};
-  const el=document.getElementById(map[ph]);if(el)el.scrollIntoView({behavior:"smooth",block:ph===4?"end":"start"});
-});
 
 /* ===== CONTROLS ===== */
 document.getElementById("tabs").querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
