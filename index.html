@@ -393,6 +393,12 @@ button{font-family:inherit}
         <button class="tab" data-con="urban"><span class="dot" style="background:var(--urban)"></span>Urban Miles <span class="ct">107</span></button>
       </div>
       <div class="feedctl">
+        <div class="selwrap"><span class="lbl">Kanstype</span>
+          <select id="typeSel">
+            <option value="alle">Panden + ontwikkelkavels</option>
+            <option value="panden">Alleen panden</option>
+            <option value="kavels">Alleen ontwikkelkavels</option>
+          </select></div>
         <div class="selwrap"><span class="lbl">Sorteren op</span>
           <select id="sortSel">
             <option value="score">Score (hoog → laag)</option>
@@ -842,7 +848,7 @@ async function loadGolden(key,force){
 }
 
 /* ===== STATE ===== */
-let fCon="alle",sortBy="score",fText="",fPrice="alle",selId=null;
+let fCon="alle",sortBy="score",fText="",fPrice="alle",selId=null,fType="alle";
 const PRICE_RANGES={alle:[0,Infinity],lt10:[0,10e6],"10-20":[10e6,20e6],"20-35":[20e6,35e6],gt35:[35e6,Infinity]};
 const favourites=new Set([2,5,9,13]); const qualified=new Set();
 const SIGLAB=[["herbestemmingsruimte","Herbestemmingsruimte"],["onderbenutting","Onderbenutting"],["eigendomsdynamiek","Eigendomsdynamiek"],["financieleDruk","Financiële druk"],["vraagdruk","Vraagdruk"]];
@@ -923,9 +929,12 @@ function fmtEurM2(v){return '€ '+v.toLocaleString('nl-NL')+'/m²';}
 function fmtEur0(v){return '€ '+v.toLocaleString('nl-NL');}
 function fmtN(v){return v.toLocaleString('nl-NL');}
 function renderCards(){
+  const showPanden=fType!=='kavels', showKavels=fType!=='panden';
+  document.getElementById("goldenCards").style.display=showPanden?'':'none';
+  document.getElementById("devsiteCards").style.display=showKavels?'':'none';
   renderGoldenCards();
   renderDevsiteCards();
-  const v=visible();const c=document.getElementById("cards");
+  const v=showPanden?visible():[];const c=document.getElementById("cards");
   c.innerHTML=v.map(cardHTML).join("")||`<div style="padding:26px;text-align:center;color:var(--mut)">Geen kansen voor deze selectie.</div>`;
   c.querySelectorAll(".card").forEach(el=>el.addEventListener("click",()=>select(+el.dataset.id,'card')));
   c.querySelectorAll(".fav").forEach(b=>b.addEventListener("click",()=>toggleFav(+b.dataset.fav)));
@@ -939,47 +948,92 @@ const BODEM_WMS='https://gis.gdngeoservices.nl/standalone/services/blk_gdn/lks_b
 const BODEM_LAYER='WBB_locaties'; // Wet Bodembescherming-locaties: bekende (potentieel) verontreinigde/onderzochte locaties
 const WOZ_PROXY='https://woz-proxy.robertvanbeilen.workers.dev';
 const KADASTER_WMS='https://service.pdok.nl/kadaster/kadastralekaart/wms/v5_0';
-let liveScan=null, liveMarker=null, liveSeq=0, livePandLayer=null;
+let liveScan=null, liveMarker=null, liveSeq=0, livePandLayer=null, livePerceelLayer=null;
+function drawLivePerceelGeom(geometry){
+  if(!LMAP||!geometry)return;
+  if(livePerceelLayer)LMAP.removeLayer(livePerceelLayer);
+  livePerceelLayer=L.geoJSON(geometry,{style:{color:'#1b5fa8',weight:3,fillColor:'#1b5fa8',fillOpacity:.16}}).addTo(LMAP);
+  try{LMAP.fitBounds(livePerceelLayer.getBounds(),{maxZoom:19,padding:[70,70]});}catch(e){}
+}
 
-async function fetchLocatie(token,lat,lon){
+async function fetchAddressDoc(lat,lon){
+  const rUrl=`${LS_BASE}/reverse?lat=${lat}&lon=${lon}&rows=1&type=adres`;
+  const rRes=await fetch(rUrl); if(!rRes.ok)throw new Error(`Locatieserver reverse: HTTP ${rRes.status}`);
+  const rJson=await rRes.json();
+  const hit=rJson.response&&rJson.response.docs&&rJson.response.docs[0];
+  if(!hit)return null;
+  const lUrl=`${LS_BASE}/lookup?id=${encodeURIComponent(hit.id)}&fl=*`;
+  const lRes=await fetch(lUrl); if(!lRes.ok)throw new Error(`Locatieserver lookup: HTTP ${lRes.status}`);
+  const lJson=await lRes.json();
+  return (lJson.response&&lJson.response.docs&&lJson.response.docs[0])||null;
+}
+/* Perceel-first klik-afhandeling (was adres-first): de reverse-geocoder geeft altijd het
+   dichtstbijzijnde adres terug, ook als dat op een ánder perceel staat dan waarop geklikt is
+   (geverifieerd: bij een lege kavel als AL 3124 vindt hij een adres 64m verderop op een naburig
+   perceel). Daarom wordt het gevonden adres hier getoetst aan het geklikte perceel via het BAG-
+   veld "gekoppeld_perceel" vóór het als bestaand pand wordt behandeld. Geen match (of geen adres)
+   maar wél een geldig perceel => ontwikkelkavel-route (Taak 2/3), geen dead-end meer. */
+async function routeClick(token,lat,lon){
+  let perceel=null;
   try{
-    const rUrl=`${LS_BASE}/reverse?lat=${lat}&lon=${lon}&rows=1&type=adres`;
-    const rRes=await fetch(rUrl); if(!rRes.ok)throw new Error(`Locatieserver reverse: HTTP ${rRes.status}`);
-    const rJson=await rRes.json();
-    const hit=rJson.response&&rJson.response.docs&&rJson.response.docs[0];
-    if(!hit)throw new Error('Geen adres gevonden op deze locatie (mogelijk water/buitengebied)');
-    const lUrl=`${LS_BASE}/lookup?id=${encodeURIComponent(hit.id)}&fl=*`;
-    const lRes=await fetch(lUrl); if(!lRes.ok)throw new Error(`Locatieserver lookup: HTTP ${lRes.status}`);
-    const lJson=await lRes.json();
-    const doc=lJson.response&&lJson.response.docs&&lJson.response.docs[0];
-    if(!doc)throw new Error('Lookup leverde geen adresgegevens op');
-    if(token!==liveSeq)return; // gebruiker klikte intussen ergens anders
+    perceel=await fetchPerceelFacts(lon,lat);
+    if(token!==liveSeq)return;
+    liveScan.perceel = perceel?{status:'ok',...perceel}:{status:'none'};
+    if(perceel&&perceel.geometry)drawLivePerceelGeom(perceel.geometry);
+    renderDrawer();
+  }catch(err){
+    console.error('[live quickscan] perceel-fetch mislukt:',err);
+    if(token!==liveSeq)return;
+    liveScan.perceel={status:'error',message:err.message||'Onbekende fout'};
+    renderDrawer();
+  }
+
+  let doc=null;
+  try{
+    doc=await fetchAddressDoc(lat,lon);
+  }catch(err){
+    console.error('[live quickscan] locatie-fetch mislukt:',err);
+  }
+  if(token!==liveSeq)return;
+
+  const onParcel=!!(doc&&perceel&&doc.gekoppeld_perceel&&doc.gekoppeld_perceel.includes(perceel.aanduiding));
+
+  if(doc&&onParcel){
     liveScan.locatie={status:'ok',data:doc};
     renderDrawer();
     fetchBagAndBodem(token,doc);
-  }catch(err){
-    console.error('[live quickscan] locatie-fetch mislukt:',err);
-    if(token!==liveSeq)return;
-    // Geen BAG-adres bij dit punt gevonden — laat B/C/D niet voor altijd op 'idle' hangen
-    // (dat toont "wordt geladen…" zonder ooit te laden). Val terug op een kadaster-only
-    // quickscan zodat elke klik óf live data óf een definitieve melding oplevert.
-    const naMsg='Niet beschikbaar — geen BAG-adres gevonden op dit punt';
-    liveScan.bag={status:'idle',message:naMsg};
-    liveScan.bodem={status:'idle',message:naMsg};
-    liveScan.woz={status:'idle',message:naMsg};
-    try{
-      const perceel=await fetchPerceelFacts(lon,lat);
-      if(token!==liveSeq)return;
-      liveScan.locatie = perceel
-        ? {status:'perceel-only',perceel}
-        : {status:'error',message:'Geen adres of kadastraal perceel gevonden op dit punt (mogelijk water of buiten Nederland)'};
-    }catch(e2){
-      console.error('[live quickscan] kadaster-fallback mislukt:',e2);
-      if(token!==liveSeq)return;
-      liveScan.locatie={status:'error',message:err.message||'Onbekende fout'};
-    }
+  }else if(perceel){
+    liveScan.locatie={status:'devkavel',nearbyDoc:doc};
+    setLiveMarkerDevkavel();
+    renderDrawer();
+    fetchDevkavelEnrichment(token,lat,lon,perceel,doc);
+  }else{
+    liveScan.locatie={status:'error',message:'Geen adres of kadastraal perceel gevonden op dit punt (mogelijk water of buiten Nederland)'};
     renderDrawer();
   }
+}
+/* Verrijking die géén BAG-adres nodig heeft (Taak 3): bodem werkt al puur op coördinaten
+   (fetchBodemFacts), dus rechtstreeks op het klikpunt aanroepen i.p.v. via een adres. Net/
+   stikstof en bestemmingsplan/DSO zijn (nog) niet gekoppeld in deze radar — die krijgen een
+   eerlijk label, geen verzonnen waarden. Grond-richtprijs hergebruikt de bestaande PROVBASE-
+   referentie (dezelfde methodiek als de indicatieve richtprijs elders in de radar). */
+async function fetchDevkavelEnrichment(token,lat,lon,perceel,nearbyDoc){
+  liveScan.bodem={status:'loading'};
+  renderDrawer();
+  try{
+    const {count,fields}=await fetchBodemFacts(lon,lat);
+    if(token!==liveSeq)return;
+    liveScan.bodem={status:'ok',count,fields};
+  }catch(err){
+    console.error('[live quickscan] Bodemloket-fetch mislukt:',err);
+    if(token!==liveSeq)return;
+    liveScan.bodem={status:'error',message:err.message||'Onbekende fout'};
+  }
+  renderDrawer();
+}
+function setLiveMarkerDevkavel(){
+  if(!liveMarker)return;
+  liveMarker.setIcon(L.divIcon({html:'<div class="lmk dev-pin"><span>◆</span></div>',className:'lmk-wrap',iconSize:[34,34],iconAnchor:[17,17]}));
 }
 function parsePointWkt(wkt){
   const m=/POINT\(([-\d.]+)\s+([-\d.]+)\)/.exec(wkt||'');
@@ -1026,7 +1080,15 @@ async function fetchPerceelFacts(lon,lat){
   const feat=json.features&&json.features[0];
   if(!feat)return null;
   const p=feat.properties;
-  return {sectie:p.sectie,perceelnummer:p.perceelnummer,grootte:Math.round(+p.kadastraleGrootteWaarde)};
+  // De GetFeatureInfo-response bevat naast de attributen ook de volledige perceelgeometrie
+  // (feat.geometry) en de gemeentecode — samen genoeg om (a) de exacte kavelcontour te tekenen
+  // en (b) dit perceel te toetsen aan het BAG-veld "gekoppeld_perceel" (zie routeClick()).
+  return {
+    sectie:p.sectie,perceelnummer:p.perceelnummer,grootte:Math.round(+p.kadastraleGrootteWaarde),
+    gemeente:p.kadastraleGemeenteWaarde,gemeenteCode:p.AKRKadastraleGemeenteCodeWaarde,
+    aanduiding:`${p.AKRKadastraleGemeenteCodeWaarde}-${p.sectie}-${p.perceelnummer}`,
+    geometry:feat.geometry
+  };
 }
 async function fetchWozFacts(nummeraanduidingId){
   if(!nummeraanduidingId)throw new Error('Geen nummeraanduiding-id beschikbaar voor WOZ-opvraging');
@@ -1094,13 +1156,14 @@ async function fetchBagAndBodem(token,doc){
 function onMapClick(e){
   const lat=+e.latlng.lat.toFixed(6), lon=+e.latlng.lng.toFixed(6);
   liveSeq++; const token=liveSeq;
-  liveScan={token,lat,lon,locatie:{status:'loading'},bag:{status:'idle'},bodem:{status:'idle'},woz:{status:'idle'}};
+  liveScan={token,lat,lon,perceel:{status:'loading'},locatie:{status:'loading'},bag:{status:'idle'},bodem:{status:'idle'},woz:{status:'idle'}};
   selId='live';
   if(liveMarker){LMAP.removeLayer(liveMarker);liveMarker=null;}
   if(livePandLayer){LMAP.removeLayer(livePandLayer);livePandLayer=null;}
+  if(livePerceelLayer){LMAP.removeLayer(livePerceelLayer);livePerceelLayer=null;}
   liveMarker=L.marker([lat,lon],{icon:L.divIcon({html:'<div class="lmk live-pin"><span>⌖</span></div>',className:'lmk-wrap',iconSize:[34,34],iconAnchor:[17,17]}),zIndexOffset:1500}).addTo(LMAP);
   renderCards();renderPins();renderDrawer();
-  fetchLocatie(token,lat,lon);
+  routeClick(token,lat,lon);
 }
 
 /* ===== MAP (Leaflet + PDOK) ===== */
@@ -1141,10 +1204,11 @@ function buildMap(){
 }
 function renderPins(){
   if(!LMAP)return;
-  renderGoldenPins();
-  renderDevsitePins();
+  const showPanden=fType!=='kavels', showKavels=fType!=='panden';
+  if(showPanden)renderGoldenPins(); else if(goldenMarkerLayer)goldenMarkerLayer.clearLayers();
+  if(showKavels)renderDevsitePins(); else if(devsiteMarkerLayer)devsiteMarkerLayer.clearLayers();
   markerLayer.clearLayers();markerById={};
-  visible().forEach(d=>{
+  (showPanden?visible():[]).forEach(d=>{
     const m=L.marker([d.lat,d.lon],{icon:scoreIcon(d),zIndexOffset:d.id===selId?1000:(d.isNew?200:0)});
     m.bindTooltip(`<b>${d.name}</b><span class="tm"><i>score ${d.score}</i><i style="color:${CC[d.concept]}">${CN[d.concept]}</i><i>${fmtEurM(d.prijs)}</i></span>`,{direction:'top',offset:[0,-6],className:'lmk-tip'});
     m.on('click',()=>select(d.id,'map'));
@@ -1322,6 +1386,7 @@ function chkCard(name,c,badge){return `<div class="check ${chkClass(c.status)}">
 function srcBadge(type){
   if(type==='live')return `<span class="srcbadge live">● Live</span>`;
   if(type==='license')return `<span class="srcbadge lic">◇ Te licentiëren</span>`;
+  if(type==='tocouple')return `<span class="srcbadge lic">◇ Nog te koppelen</span>`;
   return `<span class="srcbadge indic">○ Indicatief</span>`;
 }
 
@@ -1358,17 +1423,13 @@ function aerial(d){
 
 /* ===== LIVE QUICKSCAN — drawer ===== */
 function skeletonRows(){return `<div class="skel skelrow"></div><div class="skel skelrow w60"></div><div class="skel skelrow w40"></div>`;}
-function locatieSectionHTML(loc){
+function perceelRowsHTML(perceel){
+  if(!perceel||perceel.status!=='ok')return '';
+  return `<div class="irow"><span class="il">Kadastraal perceel</span><span class="iv">${perceel.sectie} ${perceel.perceelnummer}</span></div>
+    <div class="irow"><span class="il">Kadastrale grootte</span><span class="iv">${fmtN(perceel.grootte)} m²</span></div>`;
+}
+function locatieSectionHTML(loc,perceel){
   if(loc.status==='loading')return skeletonRows();
-  if(loc.status==='perceel-only'){
-    const p=loc.perceel;
-    return `<div class="infocard">
-      <div class="irow"><span class="il">Adres</span><span class="iv">Geen BAG-adrespunt op dit punt</span></div>
-      <div class="irow"><span class="il">Kadastraal perceel</span><span class="iv">${p.sectie} ${p.perceelnummer}</span></div>
-      <div class="irow"><span class="il">Kadastrale grootte</span><span class="iv">${fmtN(p.grootte)} m²</span></div>
-    </div>
-    <div class="livehint" style="margin:10px 0 0">Bron: Kadastrale Kaart (Kadaster) — live. Geen naastgelegen BAG-adres gevonden om te verrijken met gebouw-/bodem-/WOZ-gegevens; probeer een klik op een aangrenzend pand.</div>`;
-  }
   if(loc.status==='error')return `<div class="errbox"><span>⚠</span><div>${loc.message}</div></div>`;
   const d=loc.data;
   return `<div class="infocard">
@@ -1376,6 +1437,7 @@ function locatieSectionHTML(loc){
     <div class="irow"><span class="il">Gemeente</span><span class="iv">${d.gemeentenaam||d.woonplaatsnaam||'—'}</span></div>
     <div class="irow"><span class="il">Postcode</span><span class="iv">${d.postcode||'—'}</span></div>
     <div class="irow"><span class="il">Provincie</span><span class="iv">${d.provincienaam||'—'}</span></div>
+    ${perceelRowsHTML(perceel)}
   </div>`;
 }
 function bagSectionHTML(bag){
@@ -1424,8 +1486,93 @@ function bodemSectionHTML(bodem){
   </div>
   <div class="livehint" style="margin:10px 0 0">Bron: Bodemloket (RIVM/bevoegd gezag) — live. Dit is een quickscan-signaal, geen volledig bodemdossier.</div>`;
 }
+/* ===== ONTWIKKELKAVEL — live devkavel-quickscan (Taak 2/3/4): geen BAG-pand op het geklikte
+   perceel, dus geen dead-end maar verrijking op locatie/geometrie. Zelfde eerlijkheids-principe
+   als de rest van de radar: alleen wat écht gekoppeld is krijgt ● Live, de rest een eerlijk
+   ○ Indicatief / ◇ nog te koppelen label — geen enkele waarde verzonnen. */
+function netStikstofSectionHTML(){
+  return `<div class="checks" style="grid-template-columns:1fr">
+    ${chkCard('Netcongestie',chk('watch','Nog niet live gekoppeld','Netcongestie is gebiedsafhankelijk (netbeheerder-capaciteitskaart) — nog niet als live databron gekoppeld in deze radar.'),srcBadge('indic'))}
+    ${chkCard('Stikstof / AERIUS',chk('watch','Nog niet live gekoppeld','Stikstofdepositie vereist een AERIUS-berekening per project — nog niet als live databron gekoppeld in deze radar.'),srcBadge('indic'))}
+  </div>`;
+}
+function bestemmingsplanSectionHTML(){
+  return `<div class="infocard">
+    <div class="ictitle">Bestemmingsplan / DSO ${srcBadge('tocouple')}</div>
+    <div class="irow"><span class="il">Bestemming</span><span class="iv" style="color:var(--mut)">Nog te koppelen</span></div>
+    <div class="irow"><span class="il">Bouwvlak</span><span class="iv" style="color:var(--mut)">Nog te koppelen</span></div>
+    <div class="irow"><span class="il">Max. bouwhoogte</span><span class="iv" style="color:var(--mut)">Nog te koppelen</span></div>
+    <div class="irow"><span class="il">Bebouwingspercentage</span><span class="iv" style="color:var(--mut)">Nog te koppelen</span></div>
+  </div>
+  <div class="livehint" style="margin:10px 0 0">DSO-koppeling zit nog niet in deze radar. Dit zijn precies de randvoorwaarden die naar de Excel/Engine gaan zodra hij er is — geen waarden verzonnen.</div>`;
+}
+function grondprijsSectionHTML(perceel,provincienaam){
+  if(!perceel||perceel.status!=='ok')return `<div class="notavail">Richtprijs n.v.t. — kadastrale grootte onbekend.</div>`;
+  const perM2=PROVBASE[provincienaam]||200;
+  const laag=Math.round(perM2*0.85), hoog=Math.round(perM2*1.15);
+  const totLaag=laag*perceel.grootte, totHoog=hoog*perceel.grootte;
+  return `<div class="priceband">
+    <div class="pbmain"><div class="pbl">Grond-richtprijs · indicatief</div><div class="pbv">${fmtEurM((totLaag+totHoog)/2)}</div>
+      <div class="pbn">Richtprijs n.v.t. — grond, geen WOZ-object. Gereconstrueerde referentie o.b.v. €/m² grond bedrijventerrein${provincienaam?` (${provincienaam})`:''}, geen taxatie.</div></div>
+    <div class="pbgrid">
+      <div class="pbc"><div class="pcl">€/m² grond (bandbreedte)</div><div class="pcv">${fmtEur0(laag)}–${fmtEur0(hoog)}</div></div>
+      <div class="pbc"><div class="pcl">Kadastrale grootte</div><div class="pcv">${fmtN(perceel.grootte)}<small> m²</small></div></div>
+      <div class="pbc"><div class="pcl">Totaal (bandbreedte)</div><div class="pcv">${fmtEurM(totLaag)}–${fmtEurM(totHoog)}</div></div>
+    </div>
+  </div>`;
+}
+function devkavelDrawerBody(ls){
+  const perceel=ls.perceel, doc=ls.locatie.nearbyDoc;
+  const provincienaam=doc&&doc.provincienaam;
+  const perceelLabel=perceel&&perceel.status==='ok'?`${perceel.sectie} ${perceel.perceelnummer}`:'onbekend';
+  return `<div class="dh">
+    <div class="dtop">
+      <div class="gauge" style="width:58px;height:58px;flex:none;display:grid;place-items:center;background:color-mix(in srgb,var(--layers) 12%,var(--panel-2));border-radius:50%;border:1px solid color-mix(in srgb,var(--layers) 30%,var(--line))"><span style="color:var(--layers);font-size:24px;font-weight:700">◆</span></div>
+      <div class="dinfo">
+        <div class="dtags"><span class="devbadge">◆ Ontwikkelkavel</span><span class="livebadge"><i></i>Live quickscan</span></div>
+        <h2>Kadastraal perceel ${perceelLabel}</h2>
+        <div class="dloc">${perceel&&perceel.status==='ok'?`${perceel.gemeente} · ${fmtN(perceel.grootte)} m²`:`${ls.lat.toFixed(5)}, ${ls.lon.toFixed(5)}`}</div>
+      </div>
+      <div class="dact">
+        <button class="dbtn" id="drClose" title="Sluiten"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      </div>
+    </div>
+  </div>
+  <div class="dbody">
+    <div class="livehint">◆ Ontwikkelkavel — onbebouwde grond, geen (relevant) BAG-pand op dit perceel. Dit is geen dead-end maar een apart kanstype naast de gescoorde herontwikkelpanden (zie ook Layers Hoofddorp II XL hiernaast in de lijst).</div>
+    <div class="sec">
+      <div class="seclab"><span class="n">A</span> Kadastraal perceel ${srcBadge('live')}</div>
+      <div class="infocard">
+        <div class="irow"><span class="il">Adres</span><span class="iv">Geen BAG-pand op dit perceel</span></div>
+        ${perceelRowsHTML(perceel)}
+        ${perceel&&perceel.status==='ok'?`<div class="irow"><span class="il">Gemeente</span><span class="iv">${perceel.gemeente}</span></div>`:''}
+      </div>
+      <div class="livehint" style="margin:10px 0 0">Bron: Kadastrale Kaart (Kadaster) — live. Kavelcontour getekend en ingezoomd op de kaart.</div>
+    </div>
+    <div class="sec">
+      <div class="seclab"><span class="n">B</span> Bodem-quickscan</div>
+      ${bodemSectionHTML(ls.bodem)}
+    </div>
+    <div class="sec">
+      <div class="seclab"><span class="n">C</span> Netcongestie &amp; stikstof</div>
+      ${netStikstofSectionHTML()}
+    </div>
+    <div class="sec">
+      <div class="seclab"><span class="n">D</span> Bestemmingsplan &amp; planologie</div>
+      ${bestemmingsplanSectionHTML()}
+    </div>
+    <div class="sec">
+      <div class="seclab"><span class="n">E</span> Prijsindicatie ${srcBadge('indic')}</div>
+      ${grondprijsSectionHTML(perceel,provincienaam)}
+    </div>
+    <div class="sec">
+      <div class="livehint">Score op grond-/locatiepotentieel (ontsluiting, zichtligging, ruimte binnen bestemming/beb%) vereist de bestemmingsplan/DSO-koppeling hierboven (◇ nog te koppelen) en is daarom nog niet te berekenen. Geen kunstmatige score op een leeg perceel.</div>
+    </div>
+  </div>`;
+}
 function liveDrawerHTML(ls){
   const loc=ls.locatie;
+  if(loc.status==='devkavel')return devkavelDrawerBody(ls);
   const addr=loc.status==='ok'?loc.data.weergavenaam:null;
   const sub=loc.status==='ok'?[loc.data.gemeentenaam||loc.data.woonplaatsnaam||'',loc.data.provincienaam||''].filter(Boolean).join(', '):`${ls.lat.toFixed(5)}, ${ls.lon.toFixed(5)}`;
   return `<div class="dh">
@@ -1433,7 +1580,7 @@ function liveDrawerHTML(ls){
       <div class="gauge" style="width:58px;height:58px;flex:none;display:grid;place-items:center;background:var(--panel-2);border-radius:50%;border:1px solid var(--line)"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1b5fa8" stroke-width="2"><path d="M12 21s7-6.3 7-11a7 7 0 10-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg></div>
       <div class="dinfo">
         <div class="dtags"><span class="livebadge"><i></i>Live quickscan</span></div>
-        <h2>${addr?addr:(loc.status==='perceel-only'?`Kadastraal perceel ${loc.perceel.sectie} ${loc.perceel.perceelnummer}`:loc.status==='error'?'Geen adres gevonden':'Adres wordt bepaald…')}</h2>
+        <h2>${addr?addr:(loc.status==='error'?'Geen adres gevonden':'Adres wordt bepaald…')}</h2>
         <div class="dloc">${sub}</div>
       </div>
       <div class="dact">
@@ -1445,7 +1592,7 @@ function liveDrawerHTML(ls){
     <div class="livehint">Je klikte op de kaart. Deze sectie toont <b>echte, live opgehaalde data</b> voor deze locatie — dit is geen voorbeelddata.</div>
     <div class="sec">
       <div class="seclab"><span class="n">A</span> Locatie &amp; adres</div>
-      ${locatieSectionHTML(loc)}
+      ${locatieSectionHTML(loc,ls.perceel)}
     </div>
     <div class="sec">
       <div class="seclab"><span class="n">B</span> Gebouw (BAG)</div>
@@ -1465,6 +1612,7 @@ function closeLive(){
   selId=null;liveScan=null;
   if(liveMarker&&LMAP){LMAP.removeLayer(liveMarker);liveMarker=null;}
   if(livePandLayer&&LMAP){LMAP.removeLayer(livePandLayer);livePandLayer=null;}
+  if(livePerceelLayer&&LMAP){LMAP.removeLayer(livePerceelLayer);livePerceelLayer=null;}
   renderDrawer();renderCards();renderPins();
 }
 
@@ -1546,6 +1694,7 @@ function toast(ic,title,sub){const w=document.getElementById("toastwrap");
 document.getElementById("tabs").querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
   fCon=t.dataset.con;document.getElementById("tabs").querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===t));
   renderCards();renderPins();});
+document.getElementById("typeSel").onchange=e=>{fType=e.target.value;renderCards();renderPins();};
 document.getElementById("sortSel").onchange=e=>{sortBy=e.target.value;renderCards();};
 document.getElementById("priceSel").onchange=e=>{fPrice=e.target.value;renderCards();renderPins();};
 document.getElementById("searchBtn").onclick=()=>{const q=prompt("Zoek op plaats, regio, snelweg of concept:","");if(q!=null){fText=q;renderCards();renderPins();}};
