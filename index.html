@@ -350,6 +350,32 @@ button{font-family:inherit}
 .dev-pin span{font-size:15px}
 .gold-pin .gstar,.dev-pin .gstar{position:absolute;top:-5px;right:-5px;width:15px;height:15px;border-radius:50%;background:var(--go);color:#fff;font-size:9px;font-weight:700;display:grid;place-items:center;border:1.5px solid #fff}
 
+/* ===== FEEDBACK-LOOP — beoordelingsblok (▲✓▼ + ☆💤✕), kalibratie-teller, anti-bias nudge.
+   Bewust rustig: hergebruikt bestaande kleurtokens or/watch/crit, geen nieuwe accentkleur. */
+.fdblock{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.card .fdblock{margin-top:11px}
+.fdblock-plain{margin-top:0;padding-top:0;border-top:0}
+.fdrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.fdgroup{display:flex;gap:2px;background:var(--panel-2);border:1px solid var(--line-2);border-radius:8px;padding:2px}
+.fdbtn{appearance:none;border:0;background:transparent;color:var(--mut);font-size:13px;width:25px;height:23px;border-radius:6px;cursor:pointer;display:grid;place-items:center;transition:.12s;line-height:1}
+.fdbtn:hover{background:var(--panel-3);color:var(--ink-2)}
+.fdbtn.on{background:var(--nav);color:#fff}
+.fdnotebtn{appearance:none;border:1px solid var(--line-2);background:var(--panel);color:var(--mut);width:25px;height:25px;border-radius:6px;cursor:pointer;display:grid;place-items:center;margin-left:auto}
+.fdnotebtn:hover{color:var(--ink);border-color:var(--mut-2)}
+.fdlbl{font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut-2);font-family:"IBM Plex Mono";margin-right:2px}
+.fdreden,.fdnote{margin-top:7px;width:100%;border:1px solid var(--line-2);background:var(--panel);color:var(--ink);font:inherit;font-size:11.5px;padding:7px 9px;border-radius:7px}
+.fdtag{font-size:10.5px;padding:1px 6px;border-radius:5px;font-weight:700;white-space:nowrap}
+.fdtag.fd-shortlist{background:color-mix(in srgb,var(--watch) 16%,var(--panel));color:var(--watch)}
+.fdtag.fd-later{background:var(--panel-3);color:var(--mut)}
+.fdtag.fd-afgekeurd{background:color-mix(in srgb,var(--crit) 12%,var(--panel));color:var(--crit)}
+.calibbar{font-size:11px;color:var(--mut);padding:0 20px 10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;line-height:1.4}
+.calibbar .calibN{font-weight:700;color:var(--ink-2);font-family:"IBM Plex Mono"}
+.calibbar .calibMsg{color:var(--ink-2)}
+.calibbar .calibLbl{color:var(--mut-2)}
+.nudgebanner{border-left-color:var(--watch)!important}
+.nudgebanner .spark{background:color-mix(in srgb,var(--watch) 18%,transparent);color:var(--watch)}
+.nudgebanner .dbtn{margin-left:auto;flex:none}
+
 @media (max-width:1360px){ .main{grid-template-columns:340px 1fr 400px} }
 @media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}}
 </style>
@@ -386,6 +412,7 @@ button{font-family:inherit}
         <div class="sub"><b id="totCount">347</b> kansen in Nederland</div>
       </div>
       <div class="feednote">Kansenlijst is illustratief (voorbeelddata). Kaart is echt (PDOK). De golden examples (✓ groen) en elke locatie waarop je klikt tonen echte, live data.</div>
+      <div class="calibbar" id="calibBar"></div>
       <div class="tabs" id="tabs">
         <button class="tab on" data-con="alle">Alle <span class="ct">347</span></button>
         <button class="tab" data-con="layers"><span class="dot" style="background:var(--layers)"></span>Layers <span class="ct">142</span></button>
@@ -416,12 +443,20 @@ button{font-family:inherit}
             <option value="20-35">€ 20–35 M</option>
             <option value="gt35">&gt; € 35 M</option>
           </select></div>
+        <div class="selwrap"><span class="lbl">Pipeline</span>
+          <select id="statusSel">
+            <option value="alle">Alle statussen</option>
+            <option value="shortlist">☆ Mijn shortlist</option>
+            <option value="later">💤 Later</option>
+            <option value="afgekeurd">✕ Afgekeurd</option>
+          </select></div>
         <button class="fbtn" id="filterBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h18M6 12h12M10 19h4"/></svg>Meer</button>
       </div>
       <div class="newbanner">
         <span class="spark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18"/></svg></span>
         <div><b id="newBannerN">24 nieuwe kansen sinds je vorige bezoek</b><span>Bijgewerkt 08:42 · laatste scan vandaag</span></div>
       </div>
+      <div class="newbanner nudgebanner" id="biasNudge" style="display:none"></div>
       <div class="goldencards" id="goldenCards"></div>
       <div class="goldencards" id="devsiteCards"></div>
       <div class="cards" id="cards"></div>
@@ -777,7 +812,7 @@ function renderDevsitePins(){
   if(!LMAP)return;
   if(!devsiteMarkerLayer)devsiteMarkerLayer=L.layerGroup().addTo(LMAP);
   devsiteMarkerLayer.clearLayers();
-  DEVSITE_OPPS.forEach(g=>{
+  DEVSITE_OPPS.filter(g=>statusFilterPass(g.id)).forEach(g=>{
     const sel=selId===g.id;
     const m=L.marker([g.lat,g.lon],{icon:devsiteIcon(sel,g.echteData),zIndexOffset:sel?1200:600});
     m.bindTooltip(`<b>${g.name}</b><span class="tm"><i>◆ Ontwikkelkavel${g.echteData?' · ✓ Echte data':''}</i><i>${g.city}</i></span>`,{direction:'top',offset:[0,-6],className:'lmk-tip'});
@@ -828,7 +863,7 @@ function devsiteCardHTML(g){
       <div class="gauge" style="width:54px;height:54px">${gauge(gd.score,54)}</div>
       <div class="cinfo">
         <div class="crow"><h3>${g.name}</h3><div class="loc">${g.city}, ${g.province}</div></div>
-        <div class="crow2"><span class="devbadge">◆ Ontwikkelkavel</span>${g.echteData?'<span class="goldbadge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>Echte data</span>':''}</div>
+        <div class="crow2"><span class="devbadge">◆ Ontwikkelkavel</span>${g.echteData?'<span class="goldbadge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>Echte data</span>':''}${feedbackStatusTagHTML(g.id)}</div>
       </div>
     </div>
     <div class="why"><div class="wl">Waarom nu · uit echte kadasterfeiten</div><p>${fmtN(totalM2)} m² onbebouwd${g.parcels.length>1?` (${g.parcels.length} percelen)`:''}. ${gd.mutatieLabel}.</p></div>
@@ -836,11 +871,12 @@ function devsiteCardHTML(g){
       <div class="cm"><span class="cml">Kavel (kadaster)</span><span class="cmv">${fmtN(totalM2)} m²</span></div>
       <div class="cm"><span class="cml">Percelen</span><span class="cmv">${g.parcels.length}</span></div>
     </div>
+    ${feedbackBlockHTML(g.id,true)}
   </div>`;
 }
 function renderDevsiteCards(){
   const el=document.getElementById("devsiteCards"); if(!el)return;
-  el.innerHTML=DEVSITE_OPPS.map(devsiteCardHTML).join("");
+  el.innerHTML=DEVSITE_OPPS.filter(g=>statusFilterPass(g.id)).map(devsiteCardHTML).join("");
   el.querySelectorAll("[data-id]").forEach(card=>card.addEventListener("click",()=>select(+card.dataset.id,'card')));
 }
 function devsiteDrawerHTML(d){
@@ -869,6 +905,10 @@ function devsiteDrawerHTML(d){
   <div class="dbody">
     <div class="livehint" style="margin-bottom:14px">◆ Ontwikkelkavel — vrijgemaakt terrein zonder (relevant) BAG-pand. Gescoord op grond-/locatiepotentieel (zie score-opbouw hieronder), niet op gebouwleeftijd — dit is een apart kanstype naast de gescoorde herontwikkelpanden.</div>
     <div class="livehint" style="margin-bottom:14px">${d.note}</div>
+    <div class="sec">
+      <div class="seclab"><span class="n">01</span> Jouw beoordeling</div>
+      ${feedbackBlockHTML(d.id,false)}
+    </div>
     <div class="sec">
       <div class="seclab"><span class="n">02</span> Grond-/locatiescore</div>
       <div class="scorebox sig" style="margin-bottom:12px"><div class="sl">Grondscore</div><div class="sv">${d.grond.score}<small> / 100</small></div><div class="sbar"><i style="width:${d.grond.score}%;background:var(--green-bar)"></i></div></div>
@@ -932,11 +972,159 @@ async function loadGolden(key,force){
 }
 
 /* ===== STATE ===== */
-let fCon="alle",sortBy="score",fText="",fPrice="alle",selId=null,fType="alle";
+let fCon="alle",sortBy="score",fText="",fPrice="alle",selId=null,fType="alle",fStatus="alle";
 const PRICE_RANGES={alle:[0,Infinity],lt10:[0,10e6],"10-20":[10e6,20e6],"20-35":[20e6,35e6],gt35:[35e6,Infinity]};
 const favourites=new Set([2,5,9,13]); const qualified=new Set();
 const SIGLAB=[["herbestemmingsruimte","Herbestemmingsruimte"],["onderbenutting","Onderbenutting"],["eigendomsdynamiek","Eigendomsdynamiek"],["financieleDruk","Financiële druk"],["vraagdruk","Vraagdruk"]];
 const WHYSIG={ "Lage bebouwingsgraad":["onderbenutting"], };
+
+/* ===== FEEDBACK-LOOP (§11a) — de DD beoordeelt elke kans, dat ís de triage; rating is bijproduct.
+   MVP: vervang localStorage door een gedeelde store (API) zodra er een backend is — save()/all()/
+   forKavel() zijn bewust de enige plek die de opslag aanraakt, zodat die migratie klein blijft. */
+const FEEDBACK_KEY='radar_feedback_v1', BEOORDELAAR='Robert van Beilen';
+const REDEN_OPTS=[['bestemming','Bestemming'],['netcapaciteit','Netcapaciteit'],['prijs','Prijs'],['eigenaar','Eigenaar niet bereid'],['te_klein','Te klein'],['anders','Anders']];
+const Feedback=(function(){
+  function readAll(){
+    try{
+      const raw=localStorage.getItem(FEEDBACK_KEY);
+      if(!raw)return {};
+      const parsed=JSON.parse(raw);
+      return parsed&&typeof parsed==='object'?parsed:{};
+    }catch(e){ console.warn('[feedback] kon localStorage niet lezen:',e); return {}; }
+  }
+  function writeAll(store){
+    try{ localStorage.setItem(FEEDBACK_KEY,JSON.stringify(store)); }
+    catch(e){ console.warn('[feedback] kon localStorage niet schrijven (quota/privémodus?):',e); }
+  }
+  function save(kavelId,patch){
+    const store=readAll();
+    const existing=store[kavelId]||{kavelId,verdict:null,status:null,reden:null,notitie:null};
+    const rec={...existing,...patch,kavelId,tijdstip:new Date().toISOString()};
+    store[kavelId]=rec;
+    writeAll(store);
+    return rec;
+  }
+  function forKavel(kavelId){ return readAll()[kavelId]||null; }
+  function all(){ return readAll(); }
+  return {save,all,forKavel};
+})();
+const noteOpenIds=new Set();
+function kavelTypeOf(d){ return d.isDevSite?'ontwikkelkavel':'pand'; }
+function scoreOfOpp(d){ return d.isDevSite?d.grond.score:d.score; }
+function statusFilterPass(id){
+  if(fStatus==='alle')return true;
+  const rec=Feedback.forKavel(id);
+  return !!(rec&&rec.status===fStatus);
+}
+function setFeedbackVerdict(d,val){
+  const rec=Feedback.forKavel(d.id);
+  Feedback.save(d.id,{kavelType:kavelTypeOf(d),scoreOpMoment:scoreOfOpp(d),verdict:(rec&&rec.verdict===val)?null:val,beoordelaar:BEOORDELAAR});
+  afterFeedbackChange();
+}
+function setFeedbackStatus(d,val){
+  const rec=Feedback.forKavel(d.id);
+  const next=(rec&&rec.status===val)?null:val;
+  const patch={kavelType:kavelTypeOf(d),scoreOpMoment:scoreOfOpp(d),status:next,beoordelaar:BEOORDELAAR};
+  if(next!=='afgekeurd')patch.reden=null;
+  Feedback.save(d.id,patch);
+  afterFeedbackChange();
+}
+function setFeedbackReden(d,reden){
+  Feedback.save(d.id,{kavelType:kavelTypeOf(d),scoreOpMoment:scoreOfOpp(d),reden:reden||null,beoordelaar:BEOORDELAAR});
+  afterFeedbackChange();
+}
+function setFeedbackNote(d,text){
+  Feedback.save(d.id,{kavelType:kavelTypeOf(d),scoreOpMoment:scoreOfOpp(d),notitie:text||null,beoordelaar:BEOORDELAAR});
+}
+function afterFeedbackChange(){
+  renderCards();renderPins();renderPill();renderCalibration();renderNudge();
+  if(selId!=null&&selId!=='live')renderDrawer();
+}
+function feedbackStatusTagHTML(id){
+  const rec=Feedback.forKavel(id);
+  if(!rec||!rec.status)return '';
+  const map={shortlist:['☆','Shortlist'],later:['💤','Later'],afgekeurd:['✕','Afgekeurd']};
+  const hit=map[rec.status]; if(!hit)return '';
+  return `<span class="fdtag fd-${rec.status}" title="${hit[1]}">${hit[0]}</span>`;
+}
+function feedbackBlockHTML(id,compact){
+  const rec=Feedback.forKavel(id)||{};
+  const v=rec.verdict||null, st=rec.status||null, noteOpen=noteOpenIds.has(id);
+  return `<div class="fdblock${compact?'':' fdblock-plain'}" data-fdid="${id}">
+    <div class="fdrow">
+      <div class="fdgroup" title="Klopt de score?">
+        <button class="fdbtn ${v==='te_hoog'?'on':''}" data-fdverdict="te_hoog" title="Score te hoog">▲</button>
+        <button class="fdbtn ${v==='klopt'?'on':''}" data-fdverdict="klopt" title="Score klopt">✓</button>
+        <button class="fdbtn ${v==='te_laag'?'on':''}" data-fdverdict="te_laag" title="Score te laag">▼</button>
+      </div>
+      <div class="fdgroup" title="Status in je pipeline">
+        <button class="fdbtn ${st==='shortlist'?'on':''}" data-fdstatus="shortlist" title="Shortlist">☆</button>
+        <button class="fdbtn ${st==='later'?'on':''}" data-fdstatus="later" title="Later">💤</button>
+        <button class="fdbtn ${st==='afgekeurd'?'on':''}" data-fdstatus="afgekeurd" title="Afgekeurd">✕</button>
+      </div>
+      ${!compact?`<button class="fdnotebtn" data-fdnotetoggle title="Notitie toevoegen">✎</button>`:''}
+    </div>
+    ${st==='afgekeurd'?`<select class="fdreden" data-fdreden>
+      <option value="">Reden voor afkeuren…</option>
+      ${REDEN_OPTS.map(([val,lab])=>`<option value="${val}" ${rec.reden===val?'selected':''}>${lab}</option>`).join('')}
+    </select>`:''}
+    ${!compact&&noteOpen?`<input class="fdnote" data-fdnote type="text" maxlength="240" placeholder="Notitie (optioneel)" value="${(rec.notitie||'').replace(/"/g,'&quot;')}">`:''}
+  </div>`;
+}
+document.addEventListener('click',e=>{
+  const block=e.target.closest('.fdblock'); if(!block)return;
+  e.stopPropagation();
+  const id=+block.dataset.fdid, d=findOpp(id); if(!d)return;
+  const vbtn=e.target.closest('[data-fdverdict]'), sbtn=e.target.closest('[data-fdstatus]'), ntbtn=e.target.closest('[data-fdnotetoggle]');
+  if(vbtn)setFeedbackVerdict(d,vbtn.dataset.fdverdict);
+  else if(sbtn)setFeedbackStatus(d,sbtn.dataset.fdstatus);
+  else if(ntbtn){ noteOpenIds.has(id)?noteOpenIds.delete(id):noteOpenIds.add(id); renderDrawer(); }
+},true);
+document.addEventListener('change',e=>{
+  if(!e.target.matches('[data-fdreden]'))return;
+  const block=e.target.closest('.fdblock'); if(!block)return;
+  const id=+block.dataset.fdid, d=findOpp(id); if(d)setFeedbackReden(d,e.target.value);
+});
+document.addEventListener('blur',e=>{
+  const t=e.target; if(!t.matches||!t.matches('[data-fdnote]'))return;
+  const block=t.closest('.fdblock'); if(!block)return;
+  const id=+block.dataset.fdid, d=findOpp(id); if(d)setFeedbackNote(d,t.value.trim());
+},true);
+/* Kalibratie-teller (Taak 4): een gesimuleerde, transparante als-dan-regel op de eigen ratings —
+   géén getraind model. Bij ≥3 "te hoog"-oordelen op hetzelfde kanstype tonen we welke (echte,
+   in de score-formule bestaande) weging daardoor omlaag zou gaan. Het aantal is altijd echt/live;
+   de causale claim is expliciet gelabeld als gesimuleerd. */
+const GROND_FACTOR_NAMES=['ligging/ontsluiting','bestemmingsruimte (beb%/hoogte)','mutatiesignaal'];
+const PAND_FACTOR_NAMES=['oppervlakteschaal','ouderdomsscore'];
+function renderCalibration(){
+  const el=document.getElementById('calibBar'); if(!el)return;
+  const recs=Object.values(Feedback.all());
+  const total=recs.length;
+  const tehoog=recs.filter(r=>r.verdict==='te_hoog');
+  let melding='';
+  if(tehoog.length>=3){
+    const byType={pand:0,ontwikkelkavel:0};
+    tehoog.forEach(r=>{ byType[r.kavelType]=(byType[r.kavelType]||0)+1; });
+    const majority=byType.ontwikkelkavel>=byType.pand?'ontwikkelkavel':'pand';
+    const names=majority==='ontwikkelkavel'?GROND_FACTOR_NAMES:PAND_FACTOR_NAMES;
+    const factor=names[tehoog.length%names.length];
+    melding=`weging "${factor}" bijgesteld op basis van ${tehoog.length} beoordelingen "te hoog" (gesimuleerd)`;
+  }
+  el.innerHTML=`<span class="calibN">${total}</span> beoordeling${total===1?'':'en'}${melding?` <span>→</span> <span class="calibMsg">${melding}</span>`:''} <span class="calibLbl">· feedback lokaal · in de MVP naar het gedeelde model</span>`;
+}
+/* Anti-bias nudge (Taak 5): rustige, dismissible hint — geen pop-up-drammer. Verschijnt pas
+   zodra de DD al iets beoordeeld heeft, en blijft weg zodra hij 'm wegklikt. */
+const NUDGE_DISMISS_KEY='radar_nudge_dismissed_v1';
+function nudgeDismissed(){ try{return localStorage.getItem(NUDGE_DISMISS_KEY)==='1';}catch(e){return true;} }
+function dismissNudge(){ try{localStorage.setItem(NUDGE_DISMISS_KEY,'1');}catch(e){} renderNudge(); }
+function renderNudge(){
+  const el=document.getElementById('biasNudge'); if(!el)return;
+  const total=Object.values(Feedback.all()).length;
+  if(total<1||nudgeDismissed()){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display='';
+  el.innerHTML=`<span class="spark">💡</span><div><b>Beoordeel deze week ook 2 laag-gescoorde kavels</b><span>Zo leert het model ook wat het onterecht laag zette — niet alleen wat opvalt.</span></div><button class="dbtn" id="nudgeClose" title="Sluiten"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`;
+  const nc=document.getElementById('nudgeClose'); if(nc)nc.onclick=dismissNudge;
+}
 
 // score kleurschaal: rood (zwak) → groen (sterk)
 function scoreTier(v){ return v>=85?0 : v>=75?1 : v>=66?2 : v>=58?3 : 4; }
@@ -946,7 +1134,7 @@ function scoreText(v){return "#ffffff";}
 
 function visible(){
   const pr=PRICE_RANGES[fPrice];
-  let v=DATA.filter(d=> (fCon==="alle"||d.concept===fCon) && d.prijs>=pr[0] && d.prijs<pr[1]);
+  let v=DATA.filter(d=> (fCon==="alle"||d.concept===fCon) && d.prijs>=pr[0] && d.prijs<pr[1] && statusFilterPass(d.id));
   if(fText){const q=fText.toLowerCase();v=v.filter(d=>(d.name+" "+d.city+" "+d.province+" "+CN[d.concept]+" "+d.location.snelweg).toLowerCase().includes(q));}
   v.sort((a,b)=> sortBy==="nieuw"?(a.dagen-b.dagen)||b.score-a.score : sortBy==="signaal"?b.signal-a.signal : sortBy==="fit"?b.fit-a.fit : sortBy==="prijs"?a.prijs-b.prijs : sortBy==="perm2"?a.perM2-b.perM2 : b.score-a.score);
   return v;
@@ -973,7 +1161,7 @@ function cardHTML(d){
       <div class="gauge" style="width:54px;height:54px">${gauge(d.score,54)}</div>
       <div class="cinfo">
         <div class="crow"><h3>${d.name}</h3><div class="loc">${d.city}, ${d.province}</div></div>
-        <div class="crow2"><span class="demobadge">Voorbeelddata</span><span class="cbadge ${d.concept}">${CN[d.concept]}</span>${d.isNew?'<span class="newtag">NIEUW</span>':''}${qd?'<span class="f2tag">→ Fase 2</span>':''}</div>
+        <div class="crow2"><span class="demobadge">Voorbeelddata</span><span class="cbadge ${d.concept}">${CN[d.concept]}</span>${d.isNew?'<span class="newtag">NIEUW</span>':''}${qd?'<span class="f2tag">→ Fase 2</span>':''}${feedbackStatusTagHTML(d.id)}</div>
       </div>
     </div>
     <div class="why"><div class="wl">Waarom nu</div><p>${d.whyNow}</p></div>
@@ -983,6 +1171,7 @@ function cardHTML(d){
       <div class="cm"><span class="cml">Kavel</span><span class="cmv">${fmtHa(d.siteAreaHa)} ha</span></div>
       <div class="cm"><span class="cml">Richtprijs</span><span class="cmv">${fmtEurM(d.prijs)}</span><span class="cmsub">${fmtEurM2(d.perM2)}</span></div>
     </div>
+    ${feedbackBlockHTML(d.id,true)}
   </div>`;
 }
 function goldenCardHTML(g){
@@ -992,7 +1181,7 @@ function goldenCardHTML(g){
       <div class="gauge" style="width:54px;height:54px">${gauge(sc.score,54)}</div>
       <div class="cinfo">
         <div class="crow"><h3>${g.name}</h3><div class="loc">${g.city}, ${g.province}</div></div>
-        <div class="crow2"><span class="goldbadge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>Echte data</span></div>
+        <div class="crow2"><span class="goldbadge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>Echte data</span>${feedbackStatusTagHTML(g.id)}</div>
       </div>
     </div>
     <div class="why"><div class="wl">Waarom nu · uit echte BAG-feiten</div><p>Bouwjaar ${g.bouwjaar} (${sc.age} jaar oud). ${fmtN(g.oppervlakte)} m² BVO.</p></div>
@@ -1000,11 +1189,12 @@ function goldenCardHTML(g){
       <div class="cm"><span class="cml">Bouwjaar (BAG)</span><span class="cmv">${g.bouwjaar}</span></div>
       <div class="cm"><span class="cml">Oppervlakte (BAG)</span><span class="cmv">${fmtN(g.oppervlakte)} m²</span></div>
     </div>
+    ${feedbackBlockHTML(g.id,true)}
   </div>`;
 }
 function renderGoldenCards(){
   const el=document.getElementById("goldenCards"); if(!el)return;
-  el.innerHTML=GOLDEN_FACTS.map(goldenCardHTML).join("");
+  el.innerHTML=GOLDEN_FACTS.filter(g=>statusFilterPass(g.id)).map(goldenCardHTML).join("");
   el.querySelectorAll("[data-id]").forEach(card=>card.addEventListener("click",()=>select(+card.dataset.id,'card')));
 }
 function fmtHa(v){return v.toFixed(1).replace('.',',');}
@@ -1269,7 +1459,7 @@ function renderGoldenPins(){
   if(!LMAP)return;
   if(!goldenMarkerLayer)goldenMarkerLayer=L.layerGroup().addTo(LMAP);
   goldenMarkerLayer.clearLayers();
-  GOLDEN_FACTS.forEach(g=>{
+  GOLDEN_FACTS.filter(g=>statusFilterPass(g.id)).forEach(g=>{
     const sel=selId===g.id;
     const m=L.marker([g.lat,g.lon],{icon:goldIcon(g,sel),zIndexOffset:sel?1200:600});
     m.bindTooltip(`<b>${g.name}</b><span class="tm"><i>✓ Echte data</i><i>${g.city}</i></span>`,{direction:'top',offset:[0,-6],className:'lmk-tip'});
@@ -1313,7 +1503,10 @@ function panTo(d){ if(LMAP)LMAP.panTo([d.lat,d.lon],{animate:true}); }
 function renderPill(){
   const nNew=DATA.filter(d=>d.isNew).length, top=Math.max(...DATA.map(d=>d.score));
   const qual=DATA.filter(d=>d.verdict.c!=="crit").length;
-  const items=[["#3a9c63",nNew,"Nieuw","M12 3v18M3 12h18"],["#5aa877",top,"Hoogste score","M4 20l5-9 4 5 3-7 4 11"],["#b8791b",qualified.size,"Doorgezet","M20 6L9 17l-5-5"],["#8b949d",favourites.size,"Shortlist","M12 3l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 18.8 6.2 21.9l1.1-6.5L2.6 9.8l6.5-.9z"]];
+  // Shortlist-telling komt nu uit de feedback-store (Taak 3.1) i.p.v. de losstaande fav-hartjes,
+  // zodat de statusbalk de echte pipeline-triage van de DD weerspiegelt.
+  const shortlistN=Object.values(Feedback.all()).filter(r=>r.status==='shortlist').length;
+  const items=[["#3a9c63",nNew,"Nieuw","M12 3v18M3 12h18"],["#5aa877",top,"Hoogste score","M4 20l5-9 4 5 3-7 4 11"],["#b8791b",qualified.size,"Doorgezet","M20 6L9 17l-5-5"],["#8b949d",shortlistN,"Shortlist","M12 3l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 18.8 6.2 21.9l1.1-6.5L2.6 9.8l6.5-.9z"]];
   document.getElementById("statpill").innerHTML=items.map(([c,v,l,p])=>
     `<div class="st"><span class="sic" style="background:color-mix(in srgb,${c} 22%,transparent);color:${c}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="${p}"/></svg></span><div><div class="sv">${v}</div><div class="sl">${l}</div></div></div>`).join("");
 }
@@ -1362,6 +1555,10 @@ function drawerHTML(d){
     ${gold
       ?`<div class="livehint" style="margin-bottom:14px">✓ Echte data — adres en BAG-/bodem-/WOZ-feiten zijn live opgehaald en verifieerbaar. Overige velden (score, richtprijs, quickscan-checks, omgevingsplan) zijn indicatief; eigendom/rechten/hypotheek vereisen een Kadaster-licentie (Fase 3).</div>`
       :`<div class="livehint" style="margin-bottom:14px">⚠ Voorbeelddata — dit is illustratieve data. Open een golden example (bovenaan de kaart/lijst, groen ✓) voor 100% echte, live data.</div>`}
+    <div class="sec">
+      <div class="seclab">Jouw beoordeling</div>
+      ${feedbackBlockHTML(d.id,false)}
+    </div>
     ${gold?`<div class="sec">
       <div class="seclab">Gebouw (BAG) ${srcBadge('live')}</div>
       ${bagSectionHTML(d.live.bag)}
@@ -1787,6 +1984,7 @@ document.getElementById("tabs").querySelectorAll(".tab").forEach(t=>t.onclick=()
   fCon=t.dataset.con;document.getElementById("tabs").querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===t));
   renderCards();renderPins();});
 document.getElementById("typeSel").onchange=e=>{fType=e.target.value;renderCards();renderPins();};
+document.getElementById("statusSel").onchange=e=>{fStatus=e.target.value;renderCards();renderPins();};
 document.getElementById("sortSel").onchange=e=>{sortBy=e.target.value;renderCards();};
 document.getElementById("priceSel").onchange=e=>{fPrice=e.target.value;renderCards();renderPins();};
 document.getElementById("searchBtn").onclick=()=>{const q=prompt("Zoek op plaats, regio, snelweg of concept:","");if(q!=null){fText=q;renderCards();renderPins();}};
@@ -1801,7 +1999,7 @@ document.getElementById("zin").onclick=()=>{if(LMAP)LMAP.zoomIn();};
 document.getElementById("zout").onclick=()=>{if(LMAP)LMAP.zoomOut();};
 
 /* ===== INIT ===== */
-renderCards();renderPill();renderDrawer();select(1,'init');
+renderCards();renderPill();renderDrawer();renderCalibration();renderNudge();select(1,'init');
 try{buildMap();}catch(e){console.warn('Kaart kon niet initialiseren (Leaflet/PDOK niet bereikbaar in deze omgeving):',e);}
 addEventListener("resize",()=>{if(LMAP)LMAP.invalidateSize();});
 </script>
