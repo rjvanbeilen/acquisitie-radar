@@ -772,8 +772,16 @@ const DEVSITE_FACTS=[
      [[[4.716215245941158,52.294901366251864],[4.716123292706433,52.294837137755685],[4.716652838299168,52.2945502716738],[4.716750986511085,52.294618777204484],[4.716852195790831,52.29468942116418],[4.716955204099094,52.294761324559055],[4.717012213564403,52.29480111382649],[4.71702982365514,52.294813437262015],[4.717050871439887,52.294828179963375],[4.717239926039773,52.294960529421274],[4.717241233447776,52.29496131878151],[4.717051291338128,52.295064691352486],[4.716962313382229,52.29511311741243],[4.716774735611575,52.294981998249554],[4.71652764860763,52.29511954170618],[4.716421420465946,52.295045345724795],[4.716319500705946,52.294974176068834],[4.716215245941158,52.294901366251864]]],
      [[[4.716712863580005,52.29524888622036],[4.71652764860763,52.29511954170618],[4.716774735611575,52.294981998249554],[4.716962313382229,52.29511311741243],[4.716712863580005,52.29524888622036]]]
    ]},
+   randvoorwaarden:{
+     bestemming:'Bedrijventerrein',
+     bebPct:0.60,          // indicatief — modelaanname (DSO nog niet gekoppeld)
+     maxHoogte:10,         // m · indicatief
+     parkNorm:1.38,        // pp/100 m² BVO · indicatief
+     milieucat:'t/m 3.1',  // indicatief
+     richtprijs:600000     // € · indicatieve grondwaarde (off-market schatting) — optie 1
+   },
    note:'Vrijgemaakte ontwikkelkavel in De Hoek (Kruisweg/Rijnlanderweg) — indicatief samengevoegd uit meerdere aangrenzende percelen in herverkaveling (grensvaststelling opgeschort, 4 november 2024) met gesloopte panden (\'70-\'90) in de omgeving. Eigendoms-assemblage te bevestigen met Kadaster BRK (◇ te licentiëren, Fase 3). Hier is Layers Hoofddorp II XL gerealiseerd (6 units, Fase 2).',
-   excelFile:'Layers-Development-Model-Hoofddorp-II-XL.xlsx',realized:true,echteData:true},
+   excelFile:'Layers-Development-Plan-Hoofddorp-II-XL_leeg.xlsx',realized:true,echteData:true},
   /* Golden ontwikkelkavel 2 (Taak 4b): AL 3274 (Hoofddorp, Haarlemmermeer). Eén perceel, geen
      hardgecodeerde geometrie — die (en de grootte/grensstatus) wordt live opgehaald via dezelfde
      fetchPerceelFacts() als de losse kaartklik, zodat dit een écht geverifieerde "golden"-kavel is
@@ -798,6 +806,7 @@ const DEVSITE_OPPS=DEVSITE_FACTS.map(g=>{
     parcels:g.parcels,parcelStatus:g.parcelStatus,parcelDate:g.parcelDate,geometry:g.geometry,
     singleParcel:!!g.singleParcel,realized:!!g.realized,echteData:!!g.echteData,grond,
     note:g.note,excelFile:g.excelFile,
+    randvoorwaarden:g.randvoorwaarden||null,
     _loaded:false,
     live:{bodem:{status:'idle'}}
   };
@@ -897,7 +906,7 @@ function devsiteDrawerHTML(d){
     </div>
     <div class="dmetrics">
       <div class="dm"><div class="dml">Kavel${meer?' (samengevoegd)':''}</div><div class="dmv">${fmtHa(d.siteAreaHa)}<small> ha</small></div></div>
-      <div class="dm hl"><div class="dml">Richtprijs</div><div class="dmv" style="font-size:15px">n.v.t.</div></div>
+      <div class="dm hl"><div class="dml">Richtprijs</div><div class="dmv" style="font-size:15px">${d.randvoorwaarden?fmtEurM(d.randvoorwaarden.richtprijs):'n.v.t.'}</div></div>
       <div class="dm"><div class="dml">Percelen</div><div class="dmv">${d.parcels.length}</div></div>
       <div class="dm"><div class="dml">Totaal (kadaster) <i class="srcdot live" title="Live — Kadastrale Kaart"></i></div><div class="dmv">${fmtN(totalM2)}<small> m²</small></div></div>
     </div>
@@ -914,6 +923,20 @@ function devsiteDrawerHTML(d){
       <div class="scorebox sig" style="margin-bottom:12px"><div class="sl">Grondscore</div><div class="sv">${d.grond.score}<small> / 100</small></div><div class="sbar"><i style="width:${d.grond.score}%;background:var(--green-bar)"></i></div></div>
       ${grondBreakdownHTML(d.grond)}
     </div>
+    ${d.randvoorwaarden?`<div class="sec">
+      <div class="seclab">Randvoorwaarden · → development-plan (blok 1)</div>
+      <div class="infocard">
+        <div class="irow"><span class="il">Perceeloppervlakte</span><span class="iv">${fmtN(totalM2)} m² ${srcBadge('live')}</span></div>
+        <div class="irow"><span class="il">Bestemming</span><span class="iv">${d.randvoorwaarden.bestemming} ${srcBadge('indic')}</span></div>
+        <div class="irow"><span class="il">Max. bebouwing</span><span class="iv">${Math.round(d.randvoorwaarden.bebPct*100)}% ${srcBadge('indic')}</span></div>
+        <div class="irow"><span class="il"><b>→ Max. footprint</b></span><span class="iv"><b>${fmtN(Math.round(totalM2*d.randvoorwaarden.bebPct))} m²</b> <span style="color:var(--mut);font-weight:400">= ${fmtN(totalM2)} × ${Math.round(d.randvoorwaarden.bebPct*100)}%</span></span></div>
+        <div class="irow"><span class="il">Max. bouwhoogte</span><span class="iv">${d.randvoorwaarden.maxHoogte} m ${srcBadge('indic')}</span></div>
+        <div class="irow"><span class="il">Parkeernorm</span><span class="iv">${d.randvoorwaarden.parkNorm} pp/100 m² BVO ${srcBadge('indic')}</span></div>
+        <div class="irow"><span class="il">Milieucategorie</span><span class="iv">${d.randvoorwaarden.milieucat} ${srcBadge('indic')}</span></div>
+        <div class="irow"><span class="il">Richtprijs grond</span><span class="iv">${fmtEurM(d.randvoorwaarden.richtprijs)} ${srcBadge('indic')}</span></div>
+      </div>
+      <div class="livehint" style="margin:10px 0 0">● Live uit Kadaster · ○ indicatief (modelaanname zolang DSO/bestemmingsplan niet gekoppeld). Deze randvoorwaarden worden 1-op-1 doorgezet als blok 1 van het development-plan.</div>
+    </div>`:''}
     <div class="sec">
       <div class="seclab">${meer?'Samengevoegde kavel':'Kadastraal perceel'} · Kadastrale Kaart ${srcBadge('live')}</div>
       <div class="infocard">
@@ -936,7 +959,7 @@ function devsiteDrawerHTML(d){
     </div>
     <div class="ctawrap" id="sec-massa">
       ${qd?`<button class="cta done" disabled><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Doorgezet naar Fase 2 · Massastudie</button><div class="ctasub">Overgedragen · de radar stopt hier (einde Fase 1)</div>`
-        :`<button class="cta" id="qualBtn">Doorzetten → development-plan (Excel) <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12l7 7 7-7"/></svg></button><div class="ctasub">Download het vooringevulde development-plan (Excel) — te uploaden in de Development Engine</div>`}
+        :`<button class="cta" id="qualBtn">Doorzetten → development-plan (Excel) <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12l7 7 7-7"/></svg></button><div class="ctasub">Download het development-plan (Excel) — randvoorwaarden (blok 1) vooringevuld; de director doet de eerste calculatie en laadt het daarna in de Development Engine</div>`}
     </div>
   </div>`;
 }
@@ -1968,7 +1991,7 @@ function qualify(id){qualified.add(id);renderDrawer();renderCards();renderPins()
   const d=findOpp(id);
   if(d.excelFile){
     const a=document.createElement('a');a.href=d.excelFile;a.download=d.excelFile;document.body.appendChild(a);a.click();a.remove();
-    toast(`✓`,`Doorgezet naar Fase 2 · Massastudie`,`${d.name} — development-plan (Excel) gedownload en overgedragen aan de massastudie.`);
+    toast(`✓`,`Doorgezet naar Fase 2 · Massastudie`,`${d.name} — development-plan (Excel) gedownload en klaar voor de eerste calculatie.`);
   }else{
     toast(`✓`,`Doorgezet naar Fase 2 · Massastudie`,`${d.name} — de kavel is overgedragen aan de massastudie.`);
   }
