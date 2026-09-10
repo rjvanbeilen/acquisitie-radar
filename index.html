@@ -86,11 +86,12 @@ button{font-family:inherit}
 .tab.on{background:var(--nav);border-color:var(--nav);color:#fff}
 .tab.on .ct{color:#aeb6bd}
 .tab .dot{width:8px;height:8px;border-radius:50%}
-.feedctl{display:flex;align-items:center;gap:8px;padding:0 20px 12px;flex-wrap:wrap}
-.selwrap{position:relative;flex:1}
-.selwrap select{appearance:none;width:100%;border:1px solid var(--line-2);background:var(--panel);color:var(--ink);font:inherit;font-size:12.5px;padding:8px 30px 8px 11px;border-radius:9px;cursor:pointer}
+.feedctl{display:grid;grid-template-columns:1fr 1fr;column-gap:10px;row-gap:18px;align-items:start;padding:0 20px 14px;margin-top:6px}
+.selwrap{position:relative;min-width:0}
+.selwrap select{appearance:none;width:100%;border:1px solid var(--line-2);background:var(--panel);color:var(--ink);font:inherit;font-size:12.5px;padding:8px 26px 8px 11px;border-radius:9px;cursor:pointer;text-overflow:ellipsis}
 .selwrap::after{content:"";position:absolute;right:12px;top:50%;width:7px;height:7px;border-right:2px solid var(--mut);border-bottom:2px solid var(--mut);transform:translateY(-70%) rotate(45deg);pointer-events:none}
 .selwrap .lbl{position:absolute;left:11px;top:-7px;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);background:var(--panel-2);padding:0 4px;font-family:"IBM Plex Mono"}
+.feedctl .fbtn{grid-column:1 / -1;justify-content:center}
 .fbtn{border:1px solid var(--line-2);background:var(--panel);color:var(--ink-2);font-size:12.5px;font-weight:600;padding:8px 13px;border-radius:9px;cursor:pointer;display:inline-flex;align-items:center;gap:7px}
 .fbtn:hover{border-color:var(--mut-2)}
 
@@ -400,12 +401,13 @@ button{font-family:inherit}
 .feed{display:flex;flex-direction:column;overflow-y:hidden}
 .feed-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden}
 .composer{flex:none;border-top:1px solid var(--line);background:var(--panel);padding:12px 16px 14px}
-.composer-row{display:flex;align-items:center;gap:8px;background:var(--panel-2);border:1px solid var(--line-2);border-radius:10px;padding:9px 10px}
+.composer-row{display:flex;align-items:flex-start;gap:6px;background:var(--panel-2);border:1px solid var(--line-2);border-radius:10px;padding:0 6px}
 .composer-row:focus-within{border-color:var(--layers)}
-.qicon{color:var(--layers);flex:none;display:flex}
-.composer-row input{flex:1;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:12.5px}
-.qclear{border:0;background:var(--panel-3);color:var(--mut);width:20px;height:20px;border-radius:50%;cursor:pointer;display:grid;place-items:center;flex:none}
+.qicon{color:var(--layers);flex:none;display:flex;margin-top:14px}
+.composer-row textarea{flex:1;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:14px;line-height:1.4;padding:12px 4px;min-height:60px;max-height:260px;resize:vertical;overflow:auto}
+.qclear{border:0;background:var(--panel-3);color:var(--mut);width:20px;height:20px;border-radius:50%;cursor:pointer;display:grid;place-items:center;flex:none;margin-top:12px}
 .qclear:hover{color:var(--ink)}
+.qhint{font-size:9.5px;color:var(--mut-2);margin-top:5px}
 .qchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .qchip{appearance:none;border:1px solid color-mix(in srgb,var(--layers) 35%,var(--line-2));background:var(--panel);color:var(--layers);font:inherit;font-size:11px;font-weight:600;padding:5px 10px;border-radius:20px;cursor:pointer}
 .qchip:hover{background:var(--layers-weak)}
@@ -463,18 +465,18 @@ button{font-family:inherit}
       <div class="feedctl">
         <div class="selwrap"><span class="lbl">Kanstype</span>
           <select id="typeSel">
-            <option value="alle">Panden + ontwikkelkavels</option>
+            <option value="alle">Panden + kavels</option>
             <option value="panden">Alleen panden</option>
-            <option value="kavels">Alleen ontwikkelkavels</option>
+            <option value="kavels">Alleen kavels</option>
           </select></div>
         <div class="selwrap"><span class="lbl">Sorteren op</span>
           <select id="sortSel">
-            <option value="score">Score (hoog → laag)</option>
+            <option value="score">Score ↓</option>
             <option value="nieuw">Nieuwste eerst</option>
             <option value="signaal">Signaalscore</option>
             <option value="fit">Fit-score</option>
-            <option value="prijs">Richtprijs (laag → hoog)</option>
-            <option value="perm2">€/m² (laag → hoog)</option>
+            <option value="prijs">Richtprijs ↑</option>
+            <option value="perm2">€/m² ↑</option>
           </select></div>
         <div class="selwrap"><span class="lbl">Richtprijs</span>
           <select id="priceSel">
@@ -487,7 +489,7 @@ button{font-family:inherit}
         <div class="selwrap"><span class="lbl">Pipeline</span>
           <select id="statusSel">
             <option value="alle">Alle statussen</option>
-            <option value="shortlist">☆ Mijn shortlist</option>
+            <option value="shortlist">☆ Shortlist</option>
             <option value="later">💤 Later</option>
             <option value="afgekeurd">✕ Afgekeurd</option>
           </select></div>
@@ -507,9 +509,10 @@ button{font-family:inherit}
        <div class="qresultbar" id="queryResultBar" style="display:none"></div>
        <div class="composer-row">
          <span class="qicon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18"/></svg></span>
-         <input id="queryInput" type="text" placeholder="Vraag de radar…" autocomplete="off">
+         <textarea id="queryInput" placeholder="Vraag de radar…" rows="2"></textarea>
          <button class="qclear" id="queryClearBtn" title="Wis" style="display:none"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
        </div>
+       <div class="qhint">Enter voert de query uit · Shift+Enter = nieuwe regel · sleep rechtsonder om te vergroten</div>
        <div class="qchips" id="queryChips"></div>
        <div class="qfootnote">Werkt op de radar-data — marktvraag &amp; Today's verkoopdata volgen (MVP).</div>
      </div>
@@ -2340,7 +2343,9 @@ const Q_CHIPS=[
 function initQueryBox(){
   document.getElementById("queryChips").innerHTML=Q_CHIPS.map(c=>`<button class="qchip" data-q="${c.replace(/"/g,'&quot;')}">${c}</button>`).join("");
   const input=document.getElementById("queryInput");
-  input.addEventListener("keydown",e=>{ if(e.key==="Enter"&&input.value.trim())runQuery(input.value); });
+  input.addEventListener("keydown",e=>{
+    if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); if(input.value.trim())runQuery(input.value); }
+  });
   document.getElementById("queryChips").addEventListener("click",e=>{
     const b=e.target.closest("[data-q]"); if(!b)return;
     input.value=b.dataset.q; runQuery(b.dataset.q);
