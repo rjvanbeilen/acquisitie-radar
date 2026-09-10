@@ -148,13 +148,26 @@ button{font-family:inherit}
 .leaflet-tooltip.lmk-tip .tm{display:flex;gap:9px;margin-top:2px;color:#b6c4bb;font-size:11px}
 .leaflet-tooltip.lmk-tip .tm i{font-style:normal}
 .leaflet-tooltip-top.lmk-tip::before{border-top-color:var(--nav)}
-.mapcol .mapctl,.mapcol .maplabel,.mapcol .maplegend2,.mapcol .zoomctl,.mapcol .statpill{z-index:1000}
-.mapctl{position:absolute;top:16px;left:16px;display:flex;gap:8px;z-index:5}
+.mapcol .mapsearch,.mapcol .mapctl,.mapcol .maplabel,.mapcol .maplegend2,.mapcol .zoomctl,.mapcol .statpill{z-index:1000}
+.mapsearch{position:absolute;top:16px;left:16px;width:300px;z-index:6}
+.mapsearch-box{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.97);border:1px solid var(--line-2);border-radius:10px;padding:9px 12px;box-shadow:var(--shadow);backdrop-filter:blur(6px);color:var(--mut)}
+.mapsearch-box:focus-within{border-color:var(--ink-2);color:var(--ink-2)}
+.mapsearch-box input{flex:1;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:12.5px}
+.mapsearch-results{margin-top:6px;max-height:280px;overflow-y:auto;background:var(--panel);border:1px solid var(--line-2);border-radius:10px;box-shadow:var(--shadow-lg);display:none}
+.mapsearch-results.open{display:block}
+.mapsearch-item{padding:8px 12px;cursor:pointer;display:flex;flex-direction:column;gap:1px}
+.mapsearch-item:hover,.mapsearch-item.active{background:var(--panel-2)}
+.mapsearch-item b{font-size:12.5px;font-weight:600;color:var(--ink)}
+.mapsearch-item span{font-size:10.5px;color:var(--mut);text-transform:capitalize}
+.mapsearch-empty,.mapsearch-err{padding:9px 12px;font-size:12px}
+.mapsearch-empty{color:var(--mut)}
+.mapsearch-err{color:var(--crit)}
+.mapctl{position:absolute;top:66px;left:16px;display:flex;gap:8px;z-index:5}
 .mapbtn{background:rgba(255,255,255,.95);border:1px solid var(--line-2);color:var(--ink-2);font-size:12.5px;font-weight:600;padding:8px 13px;border-radius:9px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;box-shadow:var(--shadow);backdrop-filter:blur(6px)}
 .mapbtn:hover{border-color:var(--mut-2)}
 .mapbtn.on{background:var(--nav);border-color:var(--nav);color:#fff}
 .maplabel{position:absolute;top:16px;right:16px;z-index:5;background:rgba(255,255,255,.92);border:1px solid var(--line-2);border-radius:9px;padding:7px 12px;font-size:11.5px;color:var(--ink-2);box-shadow:var(--shadow);display:flex;align-items:center;gap:8px}
-.maplegend2{position:absolute;left:16px;top:64px;z-index:5;background:rgba(255,255,255,.95);border:1px solid var(--line-2);border-radius:10px;padding:9px 12px;box-shadow:var(--shadow);display:flex;align-items:center;gap:9px;backdrop-filter:blur(6px)}
+.maplegend2{position:absolute;left:16px;top:114px;z-index:5;background:rgba(255,255,255,.95);border:1px solid var(--line-2);border-radius:10px;padding:9px 12px;box-shadow:var(--shadow);display:flex;align-items:center;gap:9px;backdrop-filter:blur(6px)}
 .maplegend2 .mll{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);font-family:"IBM Plex Mono"}
 .maplegend2 .grad{width:104px;height:8px;border-radius:5px;background:linear-gradient(90deg,#b23a26,#c25a1f,#b07d12,#4e8c2f,#1f7a43)}
 .maplegend2 .mn,.maplegend2 .mx{font-size:10px;color:var(--mut);font-family:"IBM Plex Mono"}
@@ -379,41 +392,28 @@ button{font-family:inherit}
 @media (max-width:1360px){ .main{grid-template-columns:340px 1fr 400px} }
 @media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}}
 
-/* ===== TOPBALK LOCATIE-ZOEKBALK (navigatie, geen filter) — feat/zoek-en-vraag Taak 2 ===== */
-.navsearchwrap{position:relative}
-.navsearch{position:absolute;top:46px;right:0;width:320px;background:var(--panel);border:1px solid var(--line-2);border-radius:12px;box-shadow:var(--shadow-lg);padding:10px;z-index:80;display:none}
-.navsearch.open{display:block}
-.navsearch-row{display:flex;align-items:center;gap:8px;border:1px solid var(--line-2);border-radius:9px;padding:8px 10px;color:var(--mut)}
-.navsearch-row input{flex:1;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:13px}
-.navsearch-results{margin-top:6px;max-height:280px;overflow-y:auto}
-.navsearch-item{display:flex;flex-direction:column;gap:1px;padding:8px 9px;border-radius:8px;cursor:pointer}
-.navsearch-item:hover,.navsearch-item.active{background:var(--panel-2)}
-.navsearch-item b{font-size:12.5px;font-weight:600;color:var(--ink)}
-.navsearch-item span{font-size:10.5px;color:var(--mut);text-transform:capitalize}
-.navsearch-empty{padding:9px;font-size:12px;color:var(--mut)}
-.navsearch-err{padding:9px;font-size:12px;color:var(--crit)}
+/* ===== LOCATIE-ZOEKBALK OP DE KAART (navigatie, geen filter) — feat/zoek-en-vraag Taak A =====
+   CSS staat bij .mapsearch/.mapsearch-* hierboven in de MAP-sectie. */
 
-/* ===== "VRAAG DE RADAR" QUERY-BOX (linkerpaneel, filtert kaart+feed) — Taak 3 ===== */
-.querybox{margin:0 20px 14px;border:1px solid color-mix(in srgb,var(--layers) 30%,var(--line));background:linear-gradient(100deg,var(--layers-weak),transparent 75%),var(--panel);border-radius:13px;padding:11px 12px 12px}
-.querybox-row{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line-2);border-radius:10px;padding:9px 10px}
-.querybox-row:focus-within{border-color:var(--layers)}
+/* ===== "VRAAG DE RADAR" — composer onderin het linkerpaneel, altijd zichtbaar — Taak B ===== */
+.feed{display:flex;flex-direction:column;overflow-y:hidden}
+.feed-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden}
+.composer{flex:none;border-top:1px solid var(--line);background:var(--panel);padding:12px 16px 14px}
+.composer-row{display:flex;align-items:center;gap:8px;background:var(--panel-2);border:1px solid var(--line-2);border-radius:10px;padding:9px 10px}
+.composer-row:focus-within{border-color:var(--layers)}
 .qicon{color:var(--layers);flex:none;display:flex}
-.querybox-row input{flex:1;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:12.5px}
+.composer-row input{flex:1;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:12.5px}
 .qclear{border:0;background:var(--panel-3);color:var(--mut);width:20px;height:20px;border-radius:50%;cursor:pointer;display:grid;place-items:center;flex:none}
 .qclear:hover{color:var(--ink)}
-.qchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.qchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .qchip{appearance:none;border:1px solid color-mix(in srgb,var(--layers) 35%,var(--line-2));background:var(--panel);color:var(--layers);font:inherit;font-size:11px;font-weight:600;padding:5px 10px;border-radius:20px;cursor:pointer}
 .qchip:hover{background:var(--layers-weak)}
-.qroadmap{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-.qchip-dim{border:1px dashed var(--line-2);background:transparent;color:var(--mut-2);font-size:11px;font-weight:600;padding:5px 10px;border-radius:20px;cursor:default;display:inline-flex;align-items:center;gap:5px}
-.qchip-dim .qmvp{font-size:9px;letter-spacing:.04em;text-transform:uppercase;color:var(--mut-2);font-family:"IBM Plex Mono"}
-.qfootnote{font-size:10.5px;color:var(--mut);line-height:1.4;margin-top:9px}
-.qresultbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:9px;padding:7px 10px;border-radius:9px;background:var(--panel);border:1px solid var(--line);font-size:11.5px;color:var(--ink-2)}
+.qfootnote{font-size:10.5px;color:var(--mut);margin-top:8px}
+.qresultbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;padding:7px 10px;border-radius:9px;background:var(--panel-2);border:1px solid var(--line);font-size:11.5px;color:var(--ink-2)}
 .qresultbar b{color:var(--ink)}
 .qresultbar.err{color:var(--crit);border-color:color-mix(in srgb,var(--crit) 30%,transparent)}
 .qresultbar .qwisbtn{margin-left:auto;border:1px solid var(--line-2);background:var(--panel);color:var(--ink-2);font-size:10.5px;font-weight:600;padding:4px 9px;border-radius:20px;cursor:pointer}
 .qresultbar .qwisbtn:hover{border-color:var(--mut-2)}
-.qresultbar .qaccessnote{width:100%;font-size:10.5px;color:var(--watch)}
 
 /* query-match dimming op de kaart: niet-matchende pins gedimd, matchende licht op */
 .lmk-wrap.qdim{opacity:.3}
@@ -438,16 +438,7 @@ button{font-family:inherit}
       <div class="ph" title="Fase 5 · Opleveren &amp; overdragen"><span class="pbadge">5</span><span class="plabel">Opleveren</span></div>
     </nav>
     <div class="right">
-      <div class="navsearchwrap">
-        <button class="ic" id="searchBtn" title="Zoeken"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></button>
-        <div class="navsearch" id="navSearch">
-          <div class="navsearch-row">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-            <input id="navSearchInput" type="text" placeholder="Zoek een plaats of gemeente…" autocomplete="off">
-          </div>
-          <div class="navsearch-results" id="navSearchResults"></div>
-        </div>
-      </div>
+      <button class="ic" id="searchBtn" title="Zoek een plaats op de kaart"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></button>
       <button class="ic" title="Meldingen"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0"/></svg><span class="bdot">3</span></button>
       <div class="user"><span class="ava">RB</span><span class="uname"><b>Robert van Beilen</b><span>Sentira</span></span><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div>
     </div>
@@ -456,20 +447,10 @@ button{font-family:inherit}
   <div class="main">
     <!-- FEED -->
     <aside class="col feed">
+     <div class="feed-scroll">
       <div class="feedhead">
         <h1>Kansen</h1>
         <div class="sub"><b id="totCount">347</b> kansen in Nederland</div>
-      </div>
-      <div class="querybox">
-        <div class="querybox-row">
-          <span class="qicon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18"/></svg></span>
-          <input id="queryInput" type="text" placeholder="Vraag de radar — bv. score ≥ 70 rond Apeldoorn, groter dan 5.000 m²" autocomplete="off">
-          <button class="qclear" id="queryClearBtn" title="Wis" style="display:none"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
-        </div>
-        <div class="qresultbar" id="queryResultBar" style="display:none"></div>
-        <div class="qchips" id="queryChips"></div>
-        <div class="qroadmap" id="queryRoadmap"></div>
-        <div class="qfootnote">Werkt nu op de radar-eigen data (score, oppervlakte, ligging, concept, kanstype). Een volledige query — met marktvraag, transacties en Today's eigen verkoop-/CRM-data — draait op de gekoppelde bronnen in de MVP.</div>
       </div>
       <div class="feednote">Kansenlijst is illustratief (voorbeelddata). Kaart is echt (PDOK). De golden examples (✓ groen) en elke locatie waarop je klikt tonen echte, live data.</div>
       <div class="calibbar" id="calibBar"></div>
@@ -521,11 +502,29 @@ button{font-family:inherit}
       <div class="goldencards" id="devsiteCards"></div>
       <div class="cards" id="cards"></div>
       <button class="loadmore" id="loadMore">Meer kansen laden <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></button>
+     </div>
+     <div class="composer">
+       <div class="qresultbar" id="queryResultBar" style="display:none"></div>
+       <div class="composer-row">
+         <span class="qicon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18"/></svg></span>
+         <input id="queryInput" type="text" placeholder="Vraag de radar…" autocomplete="off">
+         <button class="qclear" id="queryClearBtn" title="Wis" style="display:none"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+       </div>
+       <div class="qchips" id="queryChips"></div>
+       <div class="qfootnote">Werkt op de radar-data — marktvraag &amp; Today's verkoopdata volgen (MVP).</div>
+     </div>
     </aside>
 
     <!-- MAP -->
     <div class="mapcol">
       <div id="map"></div>
+      <div class="mapsearch" id="mapSearch">
+        <div class="mapsearch-box">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+          <input id="mapSearchInput" type="text" placeholder="Zoek een plaats of gemeente…" autocomplete="off">
+        </div>
+        <div class="mapsearch-results" id="mapSearchResults"></div>
+      </div>
       <div class="mapctl">
         <button class="mapbtn" data-map="lagen"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5" opacity=".5"/></svg>Percelen</button>
         <button class="mapbtn" data-map="heatmap"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" opacity=".4"/></svg>Heatmap</button>
@@ -2126,56 +2125,55 @@ function toast(ic,title,sub){const w=document.getElementById("toastwrap");
   setTimeout(()=>{t.classList.remove("show");setTimeout(()=>t.remove(),320);},3600);
 }
 
-/* ===== TOPBALK LOCATIE-ZOEKBALK (Taak 2) — traditionele navigatie, filtert niets ===== */
-let navSearchHits=[], navSearchActive=-1, navSearchToken=0;
-function navSearchOpen(){ document.getElementById("navSearch").classList.add("open"); document.getElementById("navSearchInput").focus(); }
-function navSearchClose(){ document.getElementById("navSearch").classList.remove("open"); document.getElementById("navSearchResults").innerHTML=""; navSearchHits=[]; navSearchActive=-1; }
-function renderNavSearchResults(html){ document.getElementById("navSearchResults").innerHTML=html; }
-async function navSearchGo(q){
+/* ===== LOCATIE-ZOEKBALK OP DE KAART (Taak A) — traditionele navigatie, filtert niets ===== */
+let mapSearchHits=[], mapSearchActive=-1, mapSearchToken=0;
+function renderMapSearchResults(html){ const el=document.getElementById("mapSearchResults"); el.innerHTML=html; el.classList.toggle("open",!!html); }
+function mapSearchClose(){ renderMapSearchResults(""); mapSearchHits=[]; mapSearchActive=-1; }
+async function mapSearchGo(q){
   if(!q||!q.trim())return;
   const place=await geocodePlace(q).catch(()=>null);
-  if(!place){ renderNavSearchResults('<div class="navsearch-err">Plaats niet gevonden</div>'); return; }
-  flyToPlace(place); navSearchClose();
+  if(!place){ renderMapSearchResults('<div class="mapsearch-err">Plaats niet gevonden</div>'); return; }
+  flyToPlace(place); mapSearchClose();
 }
-async function navSearchSelectHit(hit){
+async function mapSearchSelectHit(hit){
   const place=await resolveBBox(hit).catch(()=>null);
-  if(!place){ renderNavSearchResults('<div class="navsearch-err">Plaats niet gevonden</div>'); return; }
-  flyToPlace(place); navSearchClose();
+  if(!place){ renderMapSearchResults('<div class="mapsearch-err">Plaats niet gevonden</div>'); return; }
+  flyToPlace(place); mapSearchClose();
 }
-function initNavSearch(){
-  const btn=document.getElementById("searchBtn"), input=document.getElementById("navSearchInput"), wrap=document.getElementById("navSearch");
-  btn.onclick=e=>{ e.stopPropagation(); wrap.classList.contains("open")?navSearchClose():navSearchOpen(); };
-  document.addEventListener("click",e=>{ if(wrap.classList.contains("open")&&!e.target.closest(".navsearchwrap"))navSearchClose(); });
+function initMapSearch(){
+  const btn=document.getElementById("searchBtn"), input=document.getElementById("mapSearchInput");
+  if(btn)btn.onclick=()=>{ input.focus(); input.select(); };
+  document.addEventListener("click",e=>{ if(!e.target.closest(".mapsearch"))mapSearchClose(); });
   let deb=null;
   input.addEventListener("input",()=>{
-    const q=input.value; navSearchActive=-1;
+    const q=input.value; mapSearchActive=-1;
     clearTimeout(deb);
-    if(!q.trim()){ renderNavSearchResults(""); navSearchHits=[]; return; }
+    if(!q.trim()){ mapSearchClose(); return; }
     deb=setTimeout(async()=>{
-      const token=++navSearchToken;
+      const token=++mapSearchToken;
       try{
         const hits=await plsSearch(q,6);
-        if(token!==navSearchToken)return;
-        navSearchHits=hits;
-        renderNavSearchResults(hits.length?hits.map((h,i)=>`<div class="navsearch-item" data-i="${i}"><b>${h.label}</b><span>${h.type}</span></div>`).join(""):'<div class="navsearch-empty">Geen resultaten</div>');
-      }catch(e){ if(token===navSearchToken)renderNavSearchResults('<div class="navsearch-err">Zoeken mislukt</div>'); }
+        if(token!==mapSearchToken)return;
+        mapSearchHits=hits;
+        renderMapSearchResults(hits.length?hits.map((h,i)=>`<div class="mapsearch-item" data-i="${i}"><b>${h.label}</b><span>${h.type}</span></div>`).join(""):'<div class="mapsearch-empty">Geen resultaten</div>');
+      }catch(e){ if(token===mapSearchToken)renderMapSearchResults('<div class="mapsearch-err">Zoeken mislukt</div>'); }
     },220);
   });
   input.addEventListener("keydown",e=>{
     if(e.key==="Enter"){
       e.preventDefault();
-      if(navSearchActive>=0&&navSearchHits[navSearchActive])navSearchSelectHit(navSearchHits[navSearchActive]);
-      else navSearchGo(input.value);
-    }else if(e.key==="Escape"){ navSearchClose(); }
+      if(mapSearchActive>=0&&mapSearchHits[mapSearchActive])mapSearchSelectHit(mapSearchHits[mapSearchActive]);
+      else mapSearchGo(input.value);
+    }else if(e.key==="Escape"){ mapSearchClose(); input.blur(); }
     else if(e.key==="ArrowDown"||e.key==="ArrowUp"){
-      if(!navSearchHits.length)return; e.preventDefault();
-      navSearchActive=e.key==="ArrowDown"?Math.min(navSearchActive+1,navSearchHits.length-1):Math.max(navSearchActive-1,0);
-      document.getElementById("navSearchResults").querySelectorAll(".navsearch-item").forEach((el,i)=>el.classList.toggle("active",i===navSearchActive));
+      if(!mapSearchHits.length)return; e.preventDefault();
+      mapSearchActive=e.key==="ArrowDown"?Math.min(mapSearchActive+1,mapSearchHits.length-1):Math.max(mapSearchActive-1,0);
+      document.getElementById("mapSearchResults").querySelectorAll(".mapsearch-item").forEach((el,i)=>el.classList.toggle("active",i===mapSearchActive));
     }
   });
-  document.getElementById("navSearchResults").addEventListener("click",e=>{
-    const it=e.target.closest(".navsearch-item"); if(!it)return;
-    navSearchSelectHit(navSearchHits[+it.dataset.i]);
+  document.getElementById("mapSearchResults").addEventListener("click",e=>{
+    const it=e.target.closest(".mapsearch-item"); if(!it)return;
+    mapSearchSelectHit(mapSearchHits[+it.dataset.i]);
   });
 }
 
@@ -2195,8 +2193,8 @@ function parseNLNumber(str){
   }
   return parseFloat(s);
 }
-const Q_MIN_WORDS='≥|>=|groter dan|meer dan|boven|hoger dan|minimaal|vanaf';
-const Q_MAX_WORDS='≤|<=|kleiner dan|minder dan|onder|lager dan|max(?:imaal)?';
+const Q_MIN_WORDS='≥|>=|>|groter dan|meer dan|boven|hoger dan|minimaal|vanaf';
+const Q_MAX_WORDS='≤|<=|<|kleiner dan|minder dan|onder|lager dan|max(?:imaal)?';
 function parseQuery(text){
   const t=(text||'').toLowerCase();
   const f={score:{min:null,max:null},area:{min:null,max:null},access:{min:null,max:null},price:{min:null,max:null},concept:null,type:null,location:null};
@@ -2255,16 +2253,15 @@ function applyQueryFilter(f,list){
   return list;
 }
 /* Query-state: qActive/qMatchIds sturen render/filter van feed én kaart (Taak 6). */
-let qActive=false, qMatchIds=null, qErrorMsg=null, qAccessNote=false, qToken=0;
+let qActive=false, qMatchIds=null, qErrorMsg=null, qToken=0;
 function queryPass(id){ return !qActive || (qMatchIds!=null && qMatchIds.has(id)); }
 async function runQuery(text){
   const token=++qToken;
-  qActive=true; qErrorMsg=null; qAccessNote=false; qMatchIds=null;
+  qActive=true; qErrorMsg=null; qMatchIds=null;
   renderQueryUI(true);
   const f=parseQuery(text);
   let list=applyQueryFilter(f,normalizedOpps());
   if(f.access.min!=null||f.access.max!=null){
-    qAccessNote=true;
     list=list.filter(r=>r.type==='devsite'&&r.access!=null);
     if(f.access.min!=null)list=list.filter(r=>r.access>=f.access.min);
     if(f.access.max!=null)list=list.filter(r=>r.access<=f.access.max);
@@ -2307,7 +2304,7 @@ function fitBoundsToList(list){
   try{ LMAP.flyToBounds(L.latLngBounds(list.map(r=>[r.lat,r.lon])),{padding:[70,70],maxZoom:14}); }catch(e){}
 }
 function clearQuery(){
-  qActive=false; qMatchIds=null; qErrorMsg=null; qAccessNote=false; ++qToken;
+  qActive=false; qMatchIds=null; qErrorMsg=null; ++qToken;
   document.getElementById("queryInput").value='';
   renderCards();renderPins();renderQueryUI(false);
 }
@@ -2316,31 +2313,23 @@ function renderQueryUI(loading){
   clearBtn.style.display=qActive?'':'none';
   if(!qActive){ bar.style.display='none'; bar.className='qresultbar'; return; }
   bar.style.display='flex';
-  const accessHtml=qAccessNote?'<div class="qaccessnote">ontsluitingsscore is alleen beschikbaar voor ontwikkelkavels (○ indicatief)</div>':'';
   if(loading){ bar.className='qresultbar'; bar.innerHTML=`<span>Zoeken…</span>`; return; }
   if(qErrorMsg){ bar.className='qresultbar err'; bar.innerHTML=`<span>${qErrorMsg}</span><button class="qwisbtn" id="qWisBtn">× toon alles</button>`; }
   else{
     const n=qMatchIds?qMatchIds.size:0;
     bar.className='qresultbar';
-    bar.innerHTML=n?`<b>${n}</b><span>locatie${n===1?'':'s'} gevonden</span><button class="qwisbtn" id="qWisBtn">× toon alles</button>${accessHtml}`
-      :`<span>Geen locaties gevonden voor deze criteria</span><button class="qwisbtn" id="qWisBtn">× toon alles</button>${accessHtml}`;
+    bar.innerHTML=n?`<b>${n}</b><span>locatie${n===1?'':'s'} gevonden</span><button class="qwisbtn" id="qWisBtn">× toon alles</button>`
+      :`<span>Geen locaties gevonden voor deze criteria</span><button class="qwisbtn" id="qWisBtn">× toon alles</button>`;
   }
   const wb=document.getElementById("qWisBtn"); if(wb)wb.onclick=clearQuery;
 }
 const Q_CHIPS=[
   "Score ≥ 70",
-  "Ontwikkelkavels groter dan 5.000 m²",
-  "Layers-locaties in Gelderland",
-  "Ontwikkelkavels met ontsluiting boven 40"
-];
-const Q_ROADMAP_CHIPS=[
-  "Locaties met veel groeiende bedrijven binnen 10 km",
-  "Welke locatie past het best bij Layers XL?",
-  "Waar verkopen units van 80–120 m² het snelst?"
+  "Ontwikkelkavels > 5.000 m²",
+  "Layers in Gelderland"
 ];
 function initQueryBox(){
   document.getElementById("queryChips").innerHTML=Q_CHIPS.map(c=>`<button class="qchip" data-q="${c.replace(/"/g,'&quot;')}">${c}</button>`).join("");
-  document.getElementById("queryRoadmap").innerHTML=Q_ROADMAP_CHIPS.map(c=>`<span class="qchip-dim">◇ ${c} <span class="qmvp">met gekoppelde data · MVP</span></span>`).join("");
   const input=document.getElementById("queryInput");
   input.addEventListener("keydown",e=>{ if(e.key==="Enter"&&input.value.trim())runQuery(input.value); });
   document.getElementById("queryChips").addEventListener("click",e=>{
@@ -2359,7 +2348,7 @@ document.getElementById("typeSel").onchange=e=>{fType=e.target.value;renderCards
 document.getElementById("statusSel").onchange=e=>{fStatus=e.target.value;renderCards();renderPins();};
 document.getElementById("sortSel").onchange=e=>{sortBy=e.target.value;renderCards();};
 document.getElementById("priceSel").onchange=e=>{fPrice=e.target.value;renderCards();renderPins();};
-initNavSearch();
+initMapSearch();
 document.querySelectorAll(".mapbtn").forEach(b=>b.onclick=()=>{
   if(b.dataset.map==="heatmap"){heat=!heat;b.classList.toggle("on",heat);renderPins();}
   else if(b.dataset.map==="lagen"){kadOn=!kadOn;b.classList.toggle("on",kadOn);if(LMAP){kadOn?kadasterLayer.addTo(LMAP):LMAP.removeLayer(kadasterLayer);}}
