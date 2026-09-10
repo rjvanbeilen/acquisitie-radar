@@ -317,8 +317,10 @@ button{font-family:inherit}
 .cta.done{background:color-mix(in srgb,var(--go) 14%,var(--panel));color:var(--go);border:1px solid color-mix(in srgb,var(--go) 34%,transparent);box-shadow:none;cursor:default}
 .ctasub{text-align:center;font-size:11px;color:var(--mut);margin-top:8px;font-family:"IBM Plex Mono"}
 
-/* toast */
-.toastwrap{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:60;display:flex;flex-direction:column;gap:8px;align-items:center}
+/* toast — z-index en bottom-offset zetten 'm altijd boven de zwarte stats-balk (nooit erachter/eronder),
+   bottom wordt dynamisch bijgewerkt via updateToastOffset() (zie script) o.b.v. de werkelijke hoogte
+   van #statpill; 26px hieronder is enkel het fallback-startpunt vóór de eerste meting. */
+.toastwrap{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:3000;display:flex;flex-direction:column;gap:8px;align-items:center}
 .toast{background:var(--nav);color:#fff;border-radius:12px;padding:13px 18px;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:12px;font-size:13.5px;opacity:0;transform:translateY(12px);transition:.28s;max-width:460px}
 .toast.show{opacity:1;transform:translateY(0)}
 .toast .tic{width:30px;height:30px;border-radius:8px;background:var(--green-bar);color:#08130c;display:grid;place-items:center;flex:none}
@@ -350,7 +352,6 @@ button{font-family:inherit}
 .srcdot.live{background:var(--go)}
 .pblive{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);font-size:12.5px;color:var(--ink-2)}
 .pblive b{font-weight:700;color:var(--ink)}
-.feednote{font-size:11px;color:var(--mut);line-height:1.4;padding:2px 0 10px}
 .card.gold{border-color:color-mix(in srgb,var(--go) 35%,var(--line));background:color-mix(in srgb,var(--go) 4%,var(--panel))}
 .gold-pin{box-shadow:0 0 0 3px #fff,0 0 0 5px var(--go),0 1px 5px rgba(20,30,20,.4)}
 
@@ -381,7 +382,7 @@ button{font-family:inherit}
 .fdtag.fd-shortlist{background:color-mix(in srgb,var(--watch) 16%,var(--panel));color:var(--watch)}
 .fdtag.fd-later{background:var(--panel-3);color:var(--mut)}
 .fdtag.fd-afgekeurd{background:color-mix(in srgb,var(--crit) 12%,var(--panel));color:var(--crit)}
-.calibbar{font-size:11px;color:var(--mut);padding:0 20px 10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;line-height:1.4}
+.calibbar{font-size:11px;color:var(--mut);padding:2px 20px 10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;line-height:1.4}
 .calibbar .calibN{font-weight:700;color:var(--ink-2);font-family:"IBM Plex Mono"}
 .calibbar .calibMsg{color:var(--ink-2)}
 .calibbar .calibLbl{color:var(--mut-2)}
@@ -452,7 +453,6 @@ button{font-family:inherit}
         <h1>Kansen</h1>
         <div class="sub"><b id="totCount">347</b> kansen in Nederland</div>
       </div>
-      <div class="feednote">Kansenlijst is illustratief (voorbeelddata). Kaart is echt (PDOK). De golden examples (✓ groen) en elke locatie waarop je klikt tonen echte, live data.</div>
       <div class="calibbar" id="calibBar"></div>
       <div class="tabs" id="tabs">
         <button class="tab on" data-con="alle">Alle <span class="ct">347</span></button>
@@ -1193,7 +1193,7 @@ function renderCalibration(){
     const factor=names[tehoog.length%names.length];
     melding=`weging "${factor}" bijgesteld op basis van ${tehoog.length} beoordelingen "te hoog" (gesimuleerd)`;
   }
-  el.innerHTML=`<span class="calibN">${total}</span> beoordeling${total===1?'':'en'}${melding?` <span>→</span> <span class="calibMsg">${melding}</span>`:''} <span class="calibLbl">· feedback lokaal · in de MVP naar het gedeelde model</span>`;
+  el.innerHTML=`<span class="calibLbl">Illustratieve kansenlijst · feedback lokaal ·</span> <span class="calibN">${total}</span> beoordeling${total===1?'':'en'}${melding?` <span>→</span> <span class="calibMsg">${melding}</span>`:''}`;
 }
 /* Anti-bias nudge (Taak 5): rustige, dismissible hint — geen pop-up-drammer. Verschijnt pas
    zodra de DD al iets beoordeeld heeft, en blijft weg zodra hij 'm wegklikt. */
@@ -2119,7 +2119,16 @@ function qualify(id){qualified.add(id);renderDrawer();renderCards();renderPins()
     toast(`✓`,`Doorgezet naar Fase 2 · Massastudie`,`${d.name} — de kavel is overgedragen aan de massastudie.`);
   }
 }
+/* Houdt de toast boven de zwarte stats-balk (#statpill) — leest de wérkelijke hoogte i.p.v. een
+   hardcoded aanname, zodat het klopt ongeacht schermgrootte en of de balk (nog) bestaat. */
+function updateToastOffset(){
+  const w=document.getElementById("toastwrap"); if(!w)return;
+  const pill=document.getElementById("statpill");
+  const h=pill?pill.getBoundingClientRect().height:0;
+  w.style.bottom=(h>0?h+16:26)+"px";
+}
 function toast(ic,title,sub){const w=document.getElementById("toastwrap");
+  updateToastOffset();
   const t=document.createElement("div");t.className="toast";t.innerHTML=`<span class="tic">${ic}</span><div><b>${title}</b><div class="tsub">${sub}</div></div>`;
   w.appendChild(t);requestAnimationFrame(()=>t.classList.add("show"));
   setTimeout(()=>{t.classList.remove("show");setTimeout(()=>t.remove(),320);},3600);
@@ -2362,7 +2371,8 @@ document.getElementById("zout").onclick=()=>{if(LMAP)LMAP.zoomOut();};
 /* ===== INIT ===== */
 renderCards();renderPill();renderDrawer();renderCalibration();renderNudge();select(1,'init');
 try{buildMap();}catch(e){console.warn('Kaart kon niet initialiseren (Leaflet/PDOK niet bereikbaar in deze omgeving):',e);}
-addEventListener("resize",()=>{if(LMAP)LMAP.invalidateSize();});
+updateToastOffset();
+addEventListener("resize",()=>{if(LMAP)LMAP.invalidateSize();updateToastOffset();});
 </script>
 </body>
 </html>
